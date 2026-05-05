@@ -1,0 +1,9 @@
+node_modules
+**/node_modules
+dist
+**/dist
+.env
+*.log
+source/backend/uploads
+source/frontend/node_modules
+source/backend/node_modules

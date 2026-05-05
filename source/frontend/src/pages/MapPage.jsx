@@ -1,0 +1,268 @@
+import { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import client from '../api/client';
+import { useAuth } from '../contexts/AuthContext';
+import Map from '../components/map/Map';
+import AssetSidebar from '../components/assets/AssetSidebar';
+import AssetDetail from '../components/assets/AssetDetail';
+import DamagePointForm from '../components/assets/DamagePointForm';
+
+export default function MapPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const { user } = useAuth();
+  const [assets, setAssets] = useState([]);
+  const [areas, setAreas] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedAsset, setSelectedAsset] = useState(null);
+  const [showForm, setShowForm] = useState(false);
+  const [editingAsset, setEditingAsset] = useState(null);
+  const [filters, setFilters] = useState({ assetType: '', status: '', search: '' });
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [isPickingLocation, setIsPickingLocation] = useState(false);
+  const [presetLocation, setPresetLocation] = useState(null);
+  const [toastMessage, setToastMessage] = useState('');
+  
+  // AI Routing state
+  const [routeData, setRouteData] = useState(null);
+  const [loadingRoute, setLoadingRoute] = useState(false);
+
+  const fetchAssets = useCallback(async () => {
+    try {
+      setLoading(true);
+      const params = { limit: 200 };
+      if (filters.assetType) params.assetType = filters.assetType;
+      if (filters.status) params.status = filters.status;
+      if (filters.search) params.search = filters.search;
+      const res = await client.get('/assets', { params });
+      setAssets(res.data.items);
+    } catch (err) {
+      console.error('Failed to fetch assets:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [filters]);
+
+  const fetchAreas = useCallback(async () => {
+    try {
+      const res = await client.get('/areas');
+      setAreas(res.data.items || []);
+    } catch (err) {
+      console.error('Failed to fetch areas:', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchAssets();
+    fetchAreas();
+  }, [fetchAssets, fetchAreas]);
+
+  useEffect(() => {
+    const assetId = searchParams.get('assetId') || selectedAsset?.id;
+    if (assetId && assets.length > 0) {
+      const found = assets.find(a => a.id === assetId);
+      if (found && JSON.stringify(found) !== JSON.stringify(selectedAsset)) {
+        setSelectedAsset(found);
+      }
+    }
+  }, [assets, searchParams, selectedAsset?.id]);
+
+  const handleAssetClick = (asset) => {
+    setSelectedAsset(asset);
+    setShowForm(false);
+    setEditingAsset(null);
+    setIsPickingLocation(false);
+  };
+
+  const handleCreateNew = () => {
+    setEditingAsset(null);
+    setShowForm(true);
+    setSelectedAsset(null);
+    setPresetLocation(null);
+    setIsPickingLocation(true);
+  };
+
+  const handleEdit = (asset) => {
+    setEditingAsset(asset);
+    setShowForm(true);
+    setSelectedAsset(null);
+    setIsPickingLocation(false);
+  };
+
+  const handleFormClose = () => {
+    setShowForm(false);
+    setEditingAsset(null);
+    setIsPickingLocation(false);
+    setPresetLocation(null);
+  };
+
+  const handleFormSaved = () => {
+    setShowForm(false);
+    setEditingAsset(null);
+    setIsPickingLocation(false);
+    setPresetLocation(null);
+    fetchAssets();
+    setToastMessage('Thao tác thành công !');
+    setTimeout(() => setToastMessage(''), 3000);
+  };
+
+  const handleDetailClose = () => {
+    setSelectedAsset(null);
+  };
+
+  const handleLocationPicked = (latLng) => {
+    setPresetLocation(latLng);
+    setIsPickingLocation(false);
+  };
+
+  const handleStartPickingLocation = () => {
+    setIsPickingLocation(true);
+  };
+
+  const generateOptimalRoute = async () => {
+    try {
+      setLoadingRoute(true);
+      const res = await client.get('/reports/routing');
+      setRouteData(res.data);
+      if (res.data.route && res.data.route.length > 0) {
+        setToastMessage(`Đã tạo lộ trình qua ${res.data.route.length} điểm sự cố!`);
+        setTimeout(() => setToastMessage(''), 3000);
+      } else {
+        alert('Không có sự cố nào đang mở để tạo lộ trình.');
+      }
+    } catch (err) {
+      console.error('Failed to generate route:', err);
+      alert('Lỗi tạo lộ trình: ' + err.message);
+    } finally {
+      setLoadingRoute(false);
+    }
+  };
+
+  return (
+    <div className="h-full flex relative min-w-0 min-h-0">
+      {/* Sidebar toggle button */}
+      <button
+        onClick={() => setSidebarOpen(!sidebarOpen)}
+        className="absolute top-3 left-3 z-[1000] p-2 bg-surface-800/90 backdrop-blur-xl border border-surface-700/50 rounded-lg text-surface-300 hover:text-white hover:bg-surface-700/90 transition-all duration-200 shadow-lg"
+      >
+        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+          {sidebarOpen ? (
+            <path strokeLinecap="round" strokeLinejoin="round" d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
+          ) : (
+            <path strokeLinecap="round" strokeLinejoin="round" d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+          )}
+        </svg>
+      </button>
+
+      {/* Left sidebar */}
+      <div className={`transition-all duration-300 flex-shrink-0 ${sidebarOpen ? 'w-80' : 'w-0'} overflow-hidden`}>
+        <AssetSidebar
+          assets={assets}
+          loading={loading}
+          filters={filters}
+          onFilterChange={setFilters}
+          onAssetClick={handleAssetClick}
+          onCreateNew={handleCreateNew}
+          selectedAssetId={selectedAsset?.id}
+        />
+      </div>
+
+      {/* Map */}
+      <div className="flex-1 relative min-w-0 min-h-0">
+        <Map
+          assets={assets}
+          areas={areas}
+          onAssetClick={handleAssetClick}
+          selectedAssetId={selectedAsset?.id}
+          focusAsset={selectedAsset}
+          isPickingLocation={isPickingLocation}
+          onLocationPicked={handleLocationPicked}
+          pickerPosition={presetLocation}
+          showAreaLayer={false}
+          routePolyline={routeData?.polyline}
+        />
+
+        {(user?.role === 'admin' || user?.role === 'technician') && (
+          <div className="absolute top-3 right-3 z-[1000]">
+            <button
+              onClick={routeData ? () => setRouteData(null) : generateOptimalRoute}
+              disabled={loadingRoute}
+              className={`px-4 py-2 rounded-lg shadow-lg flex items-center gap-2 font-medium transition-all duration-200 ${
+                routeData 
+                  ? 'bg-red-500/90 hover:bg-red-500 text-white border border-red-400/50'
+                  : 'bg-primary-600/90 hover:bg-primary-500 text-white border border-primary-500/50'
+              }`}
+            >
+              {loadingRoute ? (
+                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              ) : routeData ? (
+                <>
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                  Xoá lộ trình
+                </>
+              ) : (
+                <>
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                  </svg>
+                  AI Lộ trình ưu tiên
+                </>
+              )}
+            </button>
+            
+            {routeData && (
+              <div className="mt-2 p-3 bg-surface-900/95 backdrop-blur-xl border border-surface-700/50 rounded-lg shadow-xl text-sm">
+                <p className="text-surface-300 font-medium mb-1">Thông tin lộ trình:</p>
+                <p className="text-surface-400">• Tổng điểm: <span className="text-primary-400 font-bold">{routeData.route?.length}</span></p>
+                <p className="text-surface-400">• Khoảng cách: <span className="text-primary-400 font-bold">{(routeData.distance / 1000).toFixed(1)} km</span></p>
+                <p className="text-surface-400">• Thời gian: <span className="text-primary-400 font-bold">{Math.round(routeData.duration / 60)} phút</span></p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {isPickingLocation && (
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-[1000] px-4 py-2 bg-blue-600/90 backdrop-blur-sm rounded-full text-white text-sm font-medium shadow-lg animate-bounce">
+            Click vao ban do de danh dau diem hu hong
+          </div>
+        )}
+      </div>
+
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div className="absolute top-4 right-4 z-[2000] animate-fade-in">
+          <div className="bg-emerald-500/90 backdrop-blur-md text-white px-6 py-3 rounded-xl shadow-lg border border-emerald-400/50 flex items-center gap-2">
+            <svg className="w-5 h-5 text-emerald-100" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+            </svg>
+            <span className="font-medium text-sm">{toastMessage}</span>
+          </div>
+        </div>
+      )}
+
+      {/* Right panel - Asset detail or form */}
+      {(selectedAsset || showForm) && (
+        <div className="w-96 min-w-0 flex-shrink-0 border-l border-surface-700/50 bg-surface-900/95 backdrop-blur-xl overflow-y-auto animate-slide-right">
+          {showForm ? (
+            <DamagePointForm
+              asset={editingAsset}
+              onClose={handleFormClose}
+              onSaved={handleFormSaved}
+              presetLocation={presetLocation}
+              isPickingLocation={isPickingLocation}
+              onStartPickingLocation={handleStartPickingLocation}
+            />
+          ) : (
+            <AssetDetail
+              asset={selectedAsset}
+              onClose={handleDetailClose}
+              onEdit={handleEdit}
+              onRefresh={fetchAssets}
+            />
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
