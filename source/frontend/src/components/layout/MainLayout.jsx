@@ -2,6 +2,7 @@ import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useSocket } from '../../contexts/SocketContext';
 import { useState, useEffect } from 'react';
+import ChatWidget from './ChatWidget';
 
 const navItems = [
   {
@@ -19,6 +20,15 @@ const navItems = [
     icon: (
       <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
+      </svg>
+    ),
+  },
+  {
+    to: '/admin/users',
+    label: 'Tài khoản',
+    icon: (
+      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.109A11.386 11.386 0 0110.089 20 11.383 11.383 0 015 19.237v-.11c0-2.618 1.956-4.73 4.5-4.894M15 6a3 3 0 11-6 0 3 3 0 016 0zm6 2.25a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z" />
       </svg>
     ),
   },
@@ -94,7 +104,11 @@ export default function MainLayout() {
 
           {/* Navigation */}
           <nav className="flex items-center gap-1 ml-4">
-            {navItems.filter(item => item.to === '/' || user?.role === 'admin' || user?.role === 'technician').map((item) => (
+            {navItems.filter(item => {
+              if (item.to === '/admin/users') return user?.role === 'admin';
+              if (item.to === '/dashboard') return user?.role === 'admin' || user?.role === 'technician';
+              return true;
+            }).map((item) => (
               <NavLink
                 key={item.to}
                 to={item.to}
@@ -140,6 +154,8 @@ export default function MainLayout() {
       {/* Main content */}
       <main className="flex-1 overflow-hidden relative">
         <Outlet />
+        
+        <ChatWidget />
         
         {/* Toast Notifications */}
         <div className="absolute top-4 right-4 z-50 flex flex-col gap-2 pointer-events-none">

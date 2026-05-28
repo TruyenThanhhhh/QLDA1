@@ -16,6 +16,7 @@ Quan ly tai khoan dang nhap va vai tro su dung he thong.
 - `fullName`: string, required
 - `role`: enum `admin | technician | user`
 - `isActive`: boolean, default `true`
+- `isDeleted`: boolean, default `false`
 - `createdAt`: datetime
 - `updatedAt`: datetime
 
@@ -45,7 +46,7 @@ Luu thong tin tai san ha tang duong bo.
 - `_id`: ObjectId
 - `assetCode`: string, unique, required
 - `name`: string, required
-- `assetType`: enum `road | sign | traffic_light | manhole | lamp_post | sidewalk`
+- `assetType`: enum `road | sign | traffic_light | manhole | lamp_post | sidewalk | bus_station | parking`
 - `geometryType`: enum `Point | LineString | Polygon`
 - `geometry`: GeoJSON object, required
 - `status`: enum `good | fair | damaged`
@@ -65,6 +66,12 @@ Luu thong tin tai san ha tang duong bo.
 - `captureMethod`: enum `manual | gps | imported_osm | demo`, default `manual`
 - `approvalStatus`: enum `pending | approved | rejected`, default `approved`
 - `isDeleted`: boolean, default `false`
+- `upvotes`: array of ObjectId, ref `User` (Lưu danh sách người dùng đã upvote)
+- `comments`: array of comment objects (Bình luận của người dân)
+  - `userId`: ObjectId, ref `User`, required
+  - `fullName`: string, required
+  - `text`: string, required
+  - `createdAt`: datetime
 - `createdBy`: ObjectId, ref `User`
 - `updatedBy`: ObjectId, ref `User`
 - `createdAt`: datetime

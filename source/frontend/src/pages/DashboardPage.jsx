@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import client from '../api/client';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { exportToCSV } from '../utils/export';
 
 const STATUS_COLORS = { good: '#22c55e', fair: '#f59e0b', damaged: '#ef4444' };
 const STATUS_LABELS = { good: 'Tốt', fair: 'Trung bình', damaged: 'Hư hỏng' };
@@ -39,6 +40,42 @@ export default function DashboardPage() {
     fetchAll();
   }, []);
 
+  const handleExportExcel = () => {
+    if (!summary) return;
+    const exportData = [];
+    if (summary.byType) {
+      summary.byType.forEach(t => {
+        exportData.push({
+          "Phân loại": "Tài sản theo loại",
+          "Tên danh mục": TYPE_LABELS[t._id] || t._id,
+          "Số lượng": t.count,
+          "Ghi chú": ""
+        });
+      });
+    }
+    if (summary.byStatus) {
+      summary.byStatus.forEach(s => {
+        exportData.push({
+          "Phân loại": "Tài sản theo tình trạng",
+          "Tên danh mục": STATUS_LABELS[s._id] || s._id,
+          "Số lượng": s.count,
+          "Ghi chú": ""
+        });
+      });
+    }
+    if (incidents) {
+      incidents.forEach(inc => {
+        exportData.push({
+          "Phân loại": "Sự cố theo khu vực",
+          "Tên danh mục": inc._id || "Chưa phân khu",
+          "Số lượng": inc.count,
+          "Ghi chú": `Đang xử lý: ${inc.open}`
+        });
+      });
+    }
+    exportToCSV(exportData, `Bao_cao_tong_quan_ha_tang_${new Date().toISOString().slice(0, 10)}.csv`);
+  };
+
   if (loading) {
     return (
       <div className="h-full flex items-center justify-center">
@@ -72,10 +109,32 @@ export default function DashboardPage() {
   return (
     <div className="h-full overflow-y-auto p-6">
       <div className="max-w-7xl mx-auto space-y-6">
-        {/* Title */}
-        <div className="mb-2">
-          <h1 className="text-2xl font-bold text-white">Dashboard</h1>
-          <p className="text-surface-400 text-sm mt-1">Tổng quan tình hình hạ tầng đường bộ</p>
+        {/* Title & Actions */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-2 no-print">
+          <div>
+            <h1 className="text-2xl font-bold text-white">Dashboard</h1>
+            <p className="text-surface-400 text-sm mt-1">Tổng quan tình hình hạ tầng đường bộ</p>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => window.print()}
+              className="px-4 py-2 bg-surface-800 hover:bg-surface-700 text-surface-200 hover:text-white rounded-lg border border-surface-700/50 flex items-center gap-2 font-medium transition-all duration-200 text-sm"
+            >
+              📊 In / Xuất PDF
+            </button>
+            <button
+              onClick={handleExportExcel}
+              className="px-4 py-2 bg-primary-600 hover:bg-primary-500 text-white rounded-lg border border-primary-500/50 flex items-center gap-2 font-medium transition-all duration-200 text-sm"
+            >
+              📥 Xuất Excel
+            </button>
+          </div>
+        </div>
+
+        {/* Print Title (only visible when printing) */}
+        <div className="hidden print:block text-center border-b pb-4 mb-6">
+          <h1 className="text-2xl font-bold text-slate-800">BÁO CÁO TỔNG QUAN HẠ TẦNG ĐƯỜNG BỘ</h1>
+          <p className="text-slate-500 text-sm mt-1">Hệ thống QLDA | Ngày xuất: {new Date().toLocaleDateString('vi-VN')}</p>
         </div>
 
         {/* Stat cards */}
@@ -171,6 +230,63 @@ export default function DashboardPage() {
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Budget row */}
+        <div className="glass-card p-5">
+          <h3 className="text-base font-semibold text-white mb-4">Ngân sách Duy tu & Bảo trì</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
+            {/* Stat comparison details */}
+            <div className="space-y-4">
+              <div className="bg-surface-800/30 p-4 rounded-xl border border-surface-700/30">
+                <span className="text-xs text-surface-400">Tổng chi phí dự kiến (Kế hoạch)</span>
+                <p className="text-xl font-bold text-amber-400 mt-1">{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(summary?.totalEstimate || 0)}</p>
+              </div>
+              <div className="bg-surface-800/30 p-4 rounded-xl border border-surface-700/30">
+                <span className="text-xs text-surface-400">Tổng chi phí thực tế (Đã chi)</span>
+                <p className="text-xl font-bold text-emerald-400 mt-1">{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(summary?.totalActual || 0)}</p>
+              </div>
+              <div className="bg-surface-800/30 p-4 rounded-xl border border-surface-700/30">
+                <span className="text-xs text-surface-400">Chênh lệch ngân sách</span>
+                <p className={`text-xl font-bold mt-1 ${
+                  (summary?.totalEstimate - summary?.totalActual) >= 0 ? 'text-blue-400' : 'text-red-400'
+                }`}>
+                  {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(Math.abs((summary?.totalEstimate || 0) - (summary?.totalActual || 0)))}
+                  <span className="text-xs font-normal ml-1">
+                    {(summary?.totalEstimate - summary?.totalActual) >= 0 ? '(Tiết kiệm)' : '(Vượt dự chi)'}
+                  </span>
+                </p>
+              </div>
+            </div>
+            
+            {/* Recharts comparison bar */}
+            <div className="md:col-span-2 h-[220px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={[
+                    { name: 'So sánh chi phí', 'Dự kiến': summary?.totalEstimate || 0, 'Thực tế': summary?.totalActual || 0 }
+                  ]}
+                  barSize={60}
+                >
+                  <XAxis dataKey="name" tick={{ fill: '#94a3b8', fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <YAxis tickFormatter={(val) => `${(val / 1000000).toFixed(0)}tr`} tick={{ fill: '#94a3b8', fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <Tooltip
+                    formatter={(value) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value)}
+                    contentStyle={{
+                      background: '#1e293b',
+                      border: '1px solid rgba(71,85,105,0.5)',
+                      borderRadius: '12px',
+                      color: '#e2e8f0',
+                      fontSize: '13px',
+                    }}
+                  />
+                  <Legend formatter={(value) => <span style={{ color: '#94a3b8', fontSize: '12px' }}>{value}</span>} />
+                  <Bar dataKey="Dự kiến" fill="#f59e0b" radius={[6, 6, 0, 0]} />
+                  <Bar dataKey="Thực tế" fill="#10b981" radius={[6, 6, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
           </div>
         </div>
 

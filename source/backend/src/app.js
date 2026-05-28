@@ -11,6 +11,8 @@ const areaRoutes = require('./routes/area.routes');
 const maintenanceRoutes = require('./routes/maintenance.routes');
 const reportRoutes = require('./routes/report.routes');
 const importRoutes = require('./routes/import.routes');
+const aiRoutes = require('./routes/ai.routes');
+const userRoutes = require('./routes/user.routes');
 
 const app = express();
 
@@ -29,6 +31,8 @@ app.use('/api/areas', areaRoutes);
 app.use('/api', maintenanceRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/import', importRoutes);
+app.use('/api/ai', aiRoutes);
+app.use('/api/users', userRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

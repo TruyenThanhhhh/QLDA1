@@ -22,6 +22,9 @@ module.exports = {
   },
   getIo: () => {
     if (!io) {
+      if (process.env.NODE_ENV === 'test') {
+        return { emit: () => {} };
+      }
       throw new Error('Socket.io not initialized!');
     }
     return io;

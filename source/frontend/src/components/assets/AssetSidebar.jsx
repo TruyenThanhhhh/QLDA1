@@ -3,10 +3,12 @@ import { useAuth } from '../../contexts/AuthContext';
 const typeIcons = {
   road: '🛣️', sign: '🪧',
   traffic_light: '🚦', manhole: '🕳️', lamp_post: '💡',
+  bus_station: '🚌', parking: '🅿️',
 };
 const typeLabels = {
   road: 'Đường', sign: 'Biển báo',
   traffic_light: 'Đèn TH', manhole: 'Nắp cống', lamp_post: 'Cột đèn',
+  bus_station: 'Trạm xe buýt', parking: 'Bãi đỗ xe',
 };
 const statusLabels = { good: 'Tốt', fair: 'TB', damaged: 'Hỏng' };
 const statusStyles = {
@@ -57,6 +59,8 @@ export default function AssetSidebar({ assets, loading, filters, onFilterChange,
             <option value="traffic_light">🚦 Đèn TH</option>
             <option value="manhole">🕳️ Nắp cống</option>
             <option value="lamp_post">💡 Cột đèn</option>
+            <option value="bus_station">🚌 Trạm xe buýt</option>
+            <option value="parking">🅿️ Bãi đỗ xe</option>
           </select>
           <select
             value={filters.status}

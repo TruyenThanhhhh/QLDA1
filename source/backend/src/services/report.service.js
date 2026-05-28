@@ -9,6 +9,7 @@ const getSummary = async () => {
     openIncidents,
     recentMaintenance,
     priorityAssets,
+    costs,
   ] = await Promise.all([
     Asset.countDocuments({ isDeleted: { $ne: true } }),
     Asset.aggregate([
@@ -33,9 +34,30 @@ const getSummary = async () => {
       .populate('managedAreaId', 'code name')
       .sort({ updatedAt: 1 })
       .limit(20),
+    MaintenanceRecord.aggregate([
+      {
+        $group: {
+          _id: null,
+          totalEstimate: { $sum: '$costEstimate' },
+          totalActual: { $sum: '$costActual' },
+        },
+      },
+    ]),
   ]);
 
-  return { totalAssets, byType, byStatus, openIncidents, recentMaintenance, priorityAssets };
+  const totalEstimate = costs[0]?.totalEstimate || 0;
+  const totalActual = costs[0]?.totalActual || 0;
+
+  return { 
+    totalAssets, 
+    byType, 
+    byStatus, 
+    openIncidents, 
+    recentMaintenance, 
+    priorityAssets, 
+    totalEstimate, 
+    totalActual 
+  };
 };
 
 const getIncidentsByArea = async () => {

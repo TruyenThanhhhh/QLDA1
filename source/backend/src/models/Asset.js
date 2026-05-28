@@ -15,7 +15,7 @@ const assetSchema = new mongoose.Schema({
   assetType: {
     type: String,
     required: true,
-    enum: ['road', 'sign', 'traffic_light', 'manhole', 'lamp_post', 'sidewalk'],
+    enum: ['road', 'sign', 'traffic_light', 'manhole', 'lamp_post', 'sidewalk', 'bus_station', 'parking'],
   },
   geometryType: {
     type: String,
@@ -98,6 +98,16 @@ const assetSchema = new mongoose.Schema({
     type: Boolean,
     default: false,
   },
+  upvotes: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+  }],
+  comments: [{
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    fullName: { type: String, required: true },
+    text: { type: String, required: true },
+    createdAt: { type: Date, default: Date.now },
+  }],
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',

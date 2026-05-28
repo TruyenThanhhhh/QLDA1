@@ -22,6 +22,8 @@ const TYPE_ICONS = {
   manhole: '🕳️',
   lamp_post: '💡',
   sidewalk: '🚶',
+  bus_station: '🚌',
+  parking: '🅿️',
 };
 
 const TYPE_LABELS = {
@@ -31,6 +33,8 @@ const TYPE_LABELS = {
   manhole: 'Nắp cống',
   lamp_post: 'Cột đèn',
   sidewalk: 'Vỉa hè',
+  bus_station: 'Trạm xe buýt',
+  parking: 'Bãi đỗ xe',
 };
 
 const STATUS_LABELS = {

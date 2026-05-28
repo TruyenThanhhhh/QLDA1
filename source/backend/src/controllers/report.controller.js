@@ -38,4 +38,14 @@ const getOptimalRoute = async (req, res, next) => {
   }
 };
 
-module.exports = { getSummary, getIncidentsByArea, getPriorityList, getOptimalRoute };
+const getCustomRoute = async (req, res, next) => {
+  try {
+    const { start, end } = req.query;
+    const data = await routingService.getCustomRoute(start, end);
+    success(res, data);
+  } catch (err) {
+    next(err);
+  }
+};
+
+module.exports = { getSummary, getIncidentsByArea, getPriorityList, getOptimalRoute, getCustomRoute };

@@ -238,6 +238,45 @@ Cho phep cap nhat mot phan cac truong hop le cua `Asset`.
 }
 ```
 
+### `POST /api/assets/:id/upvote`
+
+Upvote hoặc bỏ upvote tài sản (dùng cho công dân báo cáo).
+
+#### Response 200
+```json
+{
+  "id": "asset_id",
+  "upvotesCount": 1,
+  "hasUpvoted": true
+}
+```
+
+### `POST /api/assets/:id/comment`
+
+Thêm bình luận cộng đồng vào tài sản.
+
+#### Request
+```json
+{
+  "text": "Đoạn đường này bị ngập nặng"
+}
+```
+
+#### Response 201
+```json
+{
+  "id": "asset_id",
+  "comments": [
+    {
+      "userId": "user_id",
+      "fullName": "Nguyen Van A",
+      "text": "Đoạn đường này bị ngập nặng",
+      "createdAt": "2026-04-06T08:00:00.000Z"
+    }
+  ]
+}
+```
+
 ## 3. Areas
 
 ### `GET /api/areas`
@@ -335,6 +374,125 @@ Cho phep cap nhat `status`, `description`, `performedBy`, `costEstimate`, `costA
   "assetsByStatus": [],
   "openIncidents": 0,
   "priorityAssets": []
+}
+```
+
+### `GET /api/reports/routing/custom`
+
+Chỉ đường tùy chọn tránh khu vực ngập lụt/hư hỏng nặng.
+
+#### Query params
+- `start`: string (kinh độ,vĩ độ ví dụ `108.200,16.050`)
+- `end`: string (kinh độ,vĩ độ ví dụ `108.202,16.052`)
+
+#### Response 200
+```json
+{
+  "polyline": {
+    "type": "LineString",
+    "coordinates": [[108.200, 16.050], [108.201, 16.051], [108.202, 16.052]]
+  },
+  "distance": 310.2,
+  "duration": 45.5,
+  "warnings": [
+    {
+      "id": "asset_id",
+      "name": "Biển báo hỏng",
+      "assetCode": "SIGN-001",
+      "assetType": "sign",
+      "coordinates": [108.201, 16.051],
+      "distanceApproxMeters": 10
+    }
+  ]
+}
+```
+
+## 6. User Management (Admin only)
+
+### `GET /api/users`
+
+Lấy danh sách người dùng phân trang.
+
+#### Query params
+- `page`: number
+- `limit`: number
+- `role`: string
+- `search`: string
+
+#### Response 200
+```json
+{
+  "items": [
+    {
+      "id": "user_id",
+      "username": "user01",
+      "fullName": "Nguyen Van A",
+      "role": "user",
+      "isActive": true
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 50,
+    "total": 1
+  }
+}
+```
+
+### `POST /api/users`
+
+Tạo người dùng mới.
+
+#### Request
+```json
+{
+  "username": "tech02",
+  "password": "password123",
+  "fullName": "Kỹ thuật viên B",
+  "role": "technician",
+  "isActive": true
+}
+```
+
+#### Response 201
+```json
+{
+  "id": "user_id",
+  "username": "tech02",
+  "message": "Đã tạo tài khoản thành công"
+}
+```
+
+### `PATCH /api/users/:id`
+
+Cập nhật thông tin tài khoản.
+
+#### Request
+```json
+{
+  "fullName": "Kỹ thuật viên B mới",
+  "isActive": false
+}
+```
+
+#### Response 200
+```json
+{
+  "id": "user_id",
+  "username": "tech02",
+  "message": "Cập nhật thông tin tài khoản thành công"
+}
+```
+
+### `DELETE /api/users/:id`
+
+Xóa mềm người dùng (isDeleted = true).
+
+#### Response 200
+```json
+{
+  "id": "user_id",
+  "message": "Xoá tài khoản thành công"
 }
 ```
 

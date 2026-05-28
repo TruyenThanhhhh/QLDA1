@@ -1,6 +1,7 @@
 const assetService = require('../services/asset.service');
 const { success, paginated, error } = require('../utils/response');
 const { getIo } = require('../config/socket');
+const Asset = require('../models/Asset');
 
 const getAssets = async (req, res, next) => {
   try {
@@ -58,4 +59,51 @@ const deleteAsset = async (req, res, next) => {
   }
 };
 
-module.exports = { getAssets, getAssetGeoJSON, getAsset, createAsset, updateAsset, deleteAsset };
+const upvoteAsset = async (req, res, next) => {
+  try {
+    const asset = await Asset.findById(req.params.id);
+    if (!asset || asset.isDeleted) {
+      return error(res, 'Không tìm thấy tài sản', 404);
+    }
+
+    const index = asset.upvotes.indexOf(req.user._id);
+    if (index === -1) {
+      asset.upvotes.push(req.user._id);
+    } else {
+      asset.upvotes.splice(index, 1);
+    }
+
+    await asset.save();
+    success(res, { id: asset.id, upvotesCount: asset.upvotes.length, hasUpvoted: index === -1 });
+  } catch (err) {
+    next(err);
+  }
+};
+
+const addComment = async (req, res, next) => {
+  try {
+    const { text } = req.body;
+    if (!text || !text.trim()) {
+      return error(res, 'Nội dung bình luận không được để trống', 400);
+    }
+
+    const asset = await Asset.findById(req.params.id);
+    if (!asset || asset.isDeleted) {
+      return error(res, 'Không tìm thấy tài sản', 404);
+    }
+
+    asset.comments.push({
+      userId: req.user._id,
+      fullName: req.user.fullName,
+      text: text.trim(),
+      createdAt: new Date(),
+    });
+
+    await asset.save();
+    success(res, { id: asset.id, comments: asset.comments }, 201);
+  } catch (err) {
+    next(err);
+  }
+};
+
+module.exports = { getAssets, getAssetGeoJSON, getAsset, createAsset, updateAsset, deleteAsset, upvoteAsset, addComment };

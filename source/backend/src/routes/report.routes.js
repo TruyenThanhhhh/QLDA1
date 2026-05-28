@@ -9,5 +9,6 @@ router.get('/summary', auth, rbac('admin', 'technician'), ctrl.getSummary);
 router.get('/incidents', auth, rbac('admin', 'technician'), ctrl.getIncidentsByArea);
 router.get('/priority', auth, rbac('admin', 'technician'), ctrl.getPriorityList);
 router.get('/routing', auth, ctrl.getOptimalRoute); // Ai cũng xem được lộ trình
+router.get('/routing/custom', auth, ctrl.getCustomRoute); // Đường đi tùy chọn tránh ngập lụt
 
 module.exports = router;

@@ -5,6 +5,7 @@ import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import MapPage from './pages/MapPage';
 import DashboardPage from './pages/DashboardPage';
+import AdminUsersPage from './pages/AdminUsersPage';
 import MainLayout from './components/layout/MainLayout';
 
 function ProtectedRoute({ children }) {
@@ -41,6 +42,11 @@ function AppRoutes() {
         <Route path="dashboard" element={
           user?.role === 'admin' || user?.role === 'technician' 
             ? <DashboardPage /> 
+            : <Navigate to="/" replace />
+        } />
+        <Route path="admin/users" element={
+          user?.role === 'admin' 
+            ? <AdminUsersPage /> 
             : <Navigate to="/" replace />
         } />
       </Route>

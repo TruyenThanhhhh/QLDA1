@@ -7,7 +7,7 @@ import MaintenanceForm from '../maintenance/MaintenanceForm';
 const typeLabels = {
   road: 'Đường', sign: 'Biển báo',
   traffic_light: 'Đèn tín hiệu', manhole: 'Nắp cống', lamp_post: 'Cột đèn',
-  sidewalk: 'Vỉa hè',
+  sidewalk: 'Vỉa hè', bus_station: 'Trạm xe buýt', parking: 'Bãi đỗ xe',
 };
 const statusLabels = { good: 'Tốt', fair: 'Trung bình', damaged: 'Hư hỏng' };
 const statusStyles = {
@@ -16,6 +16,7 @@ const statusStyles = {
 const typeIcons = {
   road: '🛣️', sign: '🪧',
   traffic_light: '🚦', manhole: '🕳️', lamp_post: '💡', sidewalk: '🚶',
+  bus_station: '🚌', parking: '🅿️',
 };
 const approvalLabels = {
   pending: 'Chờ duyệt',
@@ -39,6 +40,37 @@ export default function AssetDetail({ asset, onClose, onEdit, onRefresh }) {
   const [toastMessage, setToastMessage] = useState('');
   const photoInputRef = useRef(null);
   const [uploading, setUploading] = useState(false);
+  const [upvoting, setUpvoting] = useState(false);
+  const [commentText, setCommentText] = useState('');
+  const [submittingComment, setSubmittingComment] = useState(false);
+
+  const handleUpvote = async () => {
+    try {
+      setUpvoting(true);
+      await client.post(`/assets/${asset.id}/upvote`);
+      onRefresh();
+    } catch (err) {
+      alert('Bình chọn thất bại: ' + (err.response?.data?.message || err.message));
+    } finally {
+      setUpvoting(false);
+    }
+  };
+
+  const handleCommentSubmit = async (e) => {
+    e.preventDefault();
+    if (!commentText.trim()) return;
+
+    try {
+      setSubmittingComment(true);
+      await client.post(`/assets/${asset.id}/comment`, { text: commentText });
+      setCommentText('');
+      onRefresh();
+    } catch (err) {
+      alert('Gửi bình luận thất bại: ' + (err.response?.data?.message || err.message));
+    } finally {
+      setSubmittingComment(false);
+    }
+  };
 
   const handlePhotoUpload = async (e) => {
     const files = Array.from(e.target.files || []);
@@ -202,6 +234,66 @@ export default function AssetDetail({ asset, onClose, onEdit, onRefresh }) {
                   ? `[${asset.geometry.coordinates[0].toFixed(6)}, ${asset.geometry.coordinates[1].toFixed(6)}]`
                   : `${asset.geometry?.coordinates?.length || 0} điểm`
                 }
+              </div>
+            </div>
+
+            {/* Upvote & Comments */}
+            <div className="border-t border-surface-700/50 pt-4 mt-4 space-y-4">
+              <div className="flex items-center justify-between bg-surface-800/30 p-3 rounded-xl border border-surface-700/30">
+                <div className="flex flex-col">
+                  <span className="text-xs text-surface-400">Bình chọn sự cố</span>
+                  <span className="text-sm text-surface-200 font-semibold">{asset.upvotes?.length || 0} lượt thích</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleUpvote}
+                  disabled={upvoting}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors border ${
+                    asset.upvotes?.includes(user?._id || user?.id)
+                      ? 'bg-primary-600/20 text-primary-400 border-primary-500/30'
+                      : 'bg-surface-700 hover:bg-surface-600 text-surface-200 border-surface-600/50'
+                  }`}
+                >
+                  {asset.upvotes?.includes(user?._id || user?.id) ? '❤️ Đã bình chọn' : '🤍 Bình chọn'}
+                </button>
+              </div>
+
+              <div className="space-y-3">
+                <span className="label-text">Tương tác hiện trường ({asset.comments?.length || 0})</span>
+                
+                <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                  {(!asset.comments || asset.comments.length === 0) ? (
+                    <p className="text-xs text-surface-500 italic py-2">Chưa có bình luận thảo luận nào.</p>
+                  ) : (
+                    asset.comments.map((comment, index) => (
+                      <div key={index} className="bg-surface-800/40 p-2.5 rounded-lg border border-surface-700/20 text-xs">
+                        <div className="flex justify-between items-center mb-1 text-surface-400 font-medium">
+                          <span>{comment.fullName}</span>
+                          <span>{new Date(comment.createdAt).toLocaleDateString('vi-VN')}</span>
+                        </div>
+                        <p className="text-surface-200">{comment.text}</p>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                <form onSubmit={handleCommentSubmit} className="flex gap-2 pt-1">
+                  <input
+                    type="text"
+                    value={commentText}
+                    onChange={(e) => setCommentText(e.target.value)}
+                    placeholder="Viết phản hồi / bình luận..."
+                    className="input-field py-1.5 px-3 text-xs flex-1"
+                    disabled={submittingComment}
+                  />
+                  <button
+                    type="submit"
+                    disabled={submittingComment || !commentText.trim()}
+                    className="btn-primary py-1.5 px-3 text-xs flex-shrink-0"
+                  >
+                    Gửi
+                  </button>
+                </form>
               </div>
             </div>
 

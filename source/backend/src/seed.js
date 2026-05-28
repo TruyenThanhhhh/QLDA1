@@ -206,20 +206,20 @@ const roadDefinitions = [
     [108.2070, 16.0420]
   ]},
   { name: 'Duong Nguyen Luong Bang', area: 4, coords: [
-    [108.1248, 16.0658],
-    [108.1295, 16.0659],
-    [108.1342, 16.0660],
-    [108.1389, 16.0661],
-    [108.1436, 16.0662],
-    [108.1483, 16.0663],
-    [108.1530, 16.0664]
+    [108.1248, 16.1102],
+    [108.1295, 16.1055],
+    [108.1342, 16.1008],
+    [108.1389, 16.0961],
+    [108.1436, 16.0914],
+    [108.1483, 16.0867],
+    [108.1530, 16.0820]
   ]},
   { name: 'Duong Ton Duc Thang', area: 4, coords: [
-    [108.1608, 16.0658],
-    [108.1645, 16.0659],
-    [108.1682, 16.0660],
-    [108.1719, 16.0661],
-    [108.1756, 16.0662],
+    [108.1608, 16.0756],
+    [108.1645, 16.0737],
+    [108.1682, 16.0719],
+    [108.1719, 16.0700],
+    [108.1756, 16.0682],
     [108.1793, 16.0663]
   ]},
 ];
@@ -312,12 +312,12 @@ const sidewalkDefinitions = [
     [108.2490, 16.0123]
   ]},
   { name: 'Via he Ton Duc Thang dong', area: 4, coords: [
-    [108.1612, 16.0661],
-    [108.1649, 16.0662],
-    [108.1686, 16.0663],
-    [108.1723, 16.0664],
-    [108.1760, 16.0665],
-    [108.1797, 16.0666]
+    [108.1612, 16.0756],
+    [108.1649, 16.0737],
+    [108.1686, 16.0719],
+    [108.1723, 16.0700],
+    [108.1760, 16.0682],
+    [108.1797, 16.0663]
   ]},
 ];
 
@@ -335,8 +335,8 @@ const signLocations = [
   { name: 'Bien cam quay dau Vo Van Kiet', coords: [108.2396, 16.0599], area: 2 },
   { name: 'Bien benh vien Le Van Hien', coords: [108.2459, 15.9932], area: 3 },
   { name: 'Bien gioi han Nguyen Huu Tho', coords: [108.2049, 16.0279], area: 3 },
-  { name: 'Bien bao pha Nguyen Luong Bang', coords: [108.1389, 16.0661], area: 4 },
-  { name: 'Bien dung lai Ton Duc Thang', coords: [108.1719, 16.0661], area: 4 },
+  { name: 'Bien bao pha Nguyen Luong Bang', coords: [108.1389, 16.0961], area: 4 },
+  { name: 'Bien dung lai Ton Duc Thang', coords: [108.1719, 16.0700], area: 4 },
 ];
 
 const trafficLights = [
@@ -348,8 +348,8 @@ const trafficLights = [
   { name: 'Den TH Vo Van Kiet Vo Nguyen Giap', coords: [108.2423, 16.0600], area: 2 },
   { name: 'Den TH Pham Van Dong Ngo Quyen', coords: [108.2352, 16.0710], area: 2 },
   { name: 'Den TH Le Van Hien Phan Dinh', coords: [108.2466, 15.9979], area: 3 },
-  { name: 'Den TH Nguyen Luong Bang Au Co', coords: [108.1436, 16.0662], area: 4 },
-  { name: 'Den TH Ton Duc Thang Yen The', coords: [108.1719, 16.0661], area: 4 },
+  { name: 'Den TH Nguyen Luong Bang Au Co', coords: [108.1436, 16.0914], area: 4 },
+  { name: 'Den TH Ton Duc Thang Yen The', coords: [108.1719, 16.0700], area: 4 },
 ];
 
 const manholes = [
@@ -361,8 +361,8 @@ const manholes = [
   { name: 'Nap cong VNG-01', coords: [108.2478, 16.0548], area: 2 },
   { name: 'Nap cong PVD-01', coords: [108.2379, 16.0711], area: 2 },
   { name: 'Nap cong LVH-01', coords: [108.2459, 15.9932], area: 3 },
-  { name: 'Nap cong NLB-01', coords: [108.1389, 16.0661], area: 4 },
-  { name: 'Nap cong TDT-01', coords: [108.1719, 16.0661], area: 4 },
+  { name: 'Nap cong NLB-01', coords: [108.1389, 16.0961], area: 4 },
+  { name: 'Nap cong TDT-01', coords: [108.1719, 16.0700], area: 4 },
 ];
 
 const lampPosts = [
@@ -379,8 +379,8 @@ const lampPosts = [
   { name: 'Cot den PVD-01', coords: [108.2352, 16.0710], area: 2 },
   { name: 'Cot den LVH-01', coords: [108.2459, 15.9932], area: 3 },
   { name: 'Cot den LVH-02', coords: [108.2473, 16.0026], area: 3 },
-  { name: 'Cot den NLB-01', coords: [108.1342, 16.0660], area: 4 },
-  { name: 'Cot den TDT-01', coords: [108.1682, 16.0660], area: 4 },
+  { name: 'Cot den NLB-01', coords: [108.1342, 16.1008], area: 4 },
+  { name: 'Cot den TDT-01', coords: [108.1682, 16.0719], area: 4 },
 ];
 
 function createLineAsset(idx, prefix, name, assetType, coords, areaId, dimensionFactory, materialOptions, statusOptions) {
