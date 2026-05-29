@@ -7,5 +7,6 @@ const ctrl = require('../controllers/maintenance.controller');
 router.get('/assets/:id/maintenance', auth, ctrl.getByAsset);
 router.post('/assets/:id/maintenance', auth, rbac('admin', 'technician', 'user'), ctrl.create);
 router.patch('/maintenance/:id', auth, rbac('admin', 'technician'), ctrl.update);
+router.get('/tasks', auth, ctrl.getAllTasks);
 
 module.exports = router;

@@ -11,6 +11,16 @@ const getByAsset = async (req, res, next) => {
   }
 };
 
+// --- THÊM MỚI: Controller lấy danh sách tất cả Task ---
+const getAllTasks = async (req, res, next) => {
+  try {
+    const tasks = await maintenanceService.getAllTasks(req.query);
+    success(res, tasks); // Gửi về mảng các task
+  } catch (err) {
+    next(err);
+  }
+};
+
 const create = async (req, res, next) => {
   try {
     const record = await maintenanceService.create(
@@ -35,4 +45,4 @@ const update = async (req, res, next) => {
   }
 };
 
-module.exports = { getByAsset, create, update };
+module.exports = { getByAsset, getAllTasks, create, update };

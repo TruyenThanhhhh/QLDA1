@@ -19,6 +19,41 @@ const getByAsset = async (assetId, query = {}) => {
   return { records, total, page: parseInt(page), limit: parseInt(limit) };
 };
 
+// --- THÊM MỚI: Lấy danh sách tất cả các task thi công cho Dashboard Lãnh đạo ---
+const getAllTasks = async (query = {}) => {
+  // Bỏ qua các task đã bị hủy
+  const records = await MaintenanceRecord.find({ status: { $ne: 'cancelled' } })
+    .populate({
+      path: 'assetId',
+      select: 'name assetCode managedAreaId',
+      populate: { path: 'managedAreaId', select: 'name code' } // Lấy tên khu vực
+    })
+    .populate('performedBy', 'fullName role')
+    .sort({ recordedAt: -1 })
+    .limit(50); // Lấy 50 dự án mới nhất
+
+  // Format lại dữ liệu cho phù hợp với table của Dashboard Thi công
+  return records.map(record => {
+    const obj = record.toObject();
+    
+    // Tính toán giả lập phần trăm tiến độ dựa vào trạng thái
+    let progress = 0;
+    if (obj.status === 'in_progress') progress = 50;
+    if (obj.status === 'resolved') progress = 100;
+
+    return {
+      id: obj._id,
+      title: obj.title,
+      assetName: obj.assetId?.name || 'Tài sản không xác định',
+      area: obj.assetId?.managedAreaId?.name || 'Chưa phân khu',
+      status: obj.status,
+      progress: progress,
+      assignee: obj.performedBy?.fullName || 'Chưa phân công',
+      startDate: obj.recordedAt ? new Date(obj.recordedAt).toLocaleDateString('vi-VN') : 'N/A'
+    };
+  });
+};
+
 const create = async (assetId, data, user) => {
   const asset = await Asset.findById(assetId);
   if (!asset) {
@@ -84,4 +119,4 @@ const update = async (id, data, user) => {
   return record;
 };
 
-module.exports = { getByAsset, create, update };
+module.exports = { getByAsset, getAllTasks, create, update };

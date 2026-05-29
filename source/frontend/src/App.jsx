@@ -39,7 +39,8 @@ function AppRoutes() {
       }>
         <Route index element={<MapPage />} />
         <Route path="dashboard" element={
-          user?.role === 'admin' || user?.role === 'technician' 
+          // ĐÃ SỬA: Cho phép 'leader' vào Dashboard
+          ['admin', 'technician', 'leader'].includes(user?.role)
             ? <DashboardPage /> 
             : <Navigate to="/" replace />
         } />

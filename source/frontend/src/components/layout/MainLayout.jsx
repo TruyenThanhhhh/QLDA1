@@ -1,6 +1,6 @@
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { useSocket } from '../../contexts/SocketContext';
+import { useSocket } from '../../contexts/SocketContext'; 
 import { useState, useEffect } from 'react';
 
 const navItems = [
@@ -26,12 +26,14 @@ const navItems = [
 
 const roleLabels = {
   admin: 'Quản trị viên',
+  leader: 'Lãnh đạo', // Bổ sung label cho leader
   technician: 'Nhân viên KT',
   user: 'Công dân',
 };
 
 const roleColors = {
   admin: 'bg-purple-500/20 text-purple-400',
+  leader: 'bg-pink-500/20 text-pink-400', // Bổ sung màu cho leader
   technician: 'bg-blue-500/20 text-blue-400',
   user: 'bg-emerald-500/20 text-emerald-400',
 };
@@ -94,7 +96,8 @@ export default function MainLayout() {
 
           {/* Navigation */}
           <nav className="flex items-center gap-1 ml-4">
-            {navItems.filter(item => item.to === '/' || user?.role === 'admin' || user?.role === 'technician').map((item) => (
+            {/* ĐÃ SỬA: Cho phép leader thấy nút Dashboard */}
+            {navItems.filter(item => item.to === '/' || ['admin', 'technician', 'leader'].includes(user?.role)).map((item) => (
               <NavLink
                 key={item.to}
                 to={item.to}
@@ -118,12 +121,12 @@ export default function MainLayout() {
         <div className="flex items-center gap-3">
           <div className="text-right">
             <p className="text-sm text-surface-200 font-medium leading-tight">{user?.fullName}</p>
-            <span className={`inline-block text-[10px] px-1.5 py-0.5 rounded-md font-medium mt-0.5 ${roleColors[user?.role]}`}>
-              {roleLabels[user?.role]}
+            <span className={`inline-block text-[10px] px-1.5 py-0.5 rounded-md font-medium mt-0.5 ${roleColors[user?.role] || 'bg-surface-700'}`}>
+              {roleLabels[user?.role] || user?.role}
             </span>
           </div>
           <div className="w-8 h-8 bg-gradient-to-br from-surface-600 to-surface-700 rounded-lg flex items-center justify-center text-surface-300 text-sm font-semibold">
-            {user?.fullName?.charAt(0)}
+            {user?.fullName?.charAt(0) || 'U'}
           </div>
           <button
             onClick={handleLogout}
