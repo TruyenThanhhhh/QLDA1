@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
+import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import client from '../api/client';
 import { useAuth } from '../contexts/AuthContext';
-import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 
 const STATUS_COLORS = { good: '#22c55e', fair: '#f59e0b', damaged: '#ef4444' };
 const STATUS_LABELS = { good: 'Tốt', fair: 'Trung bình', damaged: 'Hư hỏng' };
@@ -37,15 +37,23 @@ export default function DashboardPage() {
           client.get('/reports/incidents'),
           client.get('/reports/priority'),
           client.get('/assets', { params: { approvalStatus: 'pending', limit: 10 } }),
-          client.get('/maintenance/tasks')
+          client.get('/tasks') // ĐÃ SỬA TẠI ĐÂY: Khớp chuẩn với Backend
         ]);
         
-        // ĐÃ TỐI ƯU: Đảm bảo bóc đúng lớp 'data' kể cả khi Backend gói thêm 1 class { success, data }
-        const sumData = sumRes.data?.data || sumRes.data;
-        const incData = incRes.data?.data || incRes.data || [];
-        const priData = priRes.data?.data || priRes.data || [];
-        const pendData = pendRes.data?.data?.items || pendRes.data?.items || pendRes.data?.data || pendRes.data || [];
-        const constData = constRes.data?.data || constRes.data || [];
+        // --- BÓC TÁCH DỮ LIỆU AN TOÀN (SAFE FALLBACK) ---
+        const sumData = sumRes.data?.data || sumRes.data || null;
+        
+        const rawInc = incRes.data?.data || incRes.data;
+        const incData = Array.isArray(rawInc) ? rawInc : [];
+        
+        const rawPri = priRes.data?.data || priRes.data;
+        const priData = Array.isArray(rawPri) ? rawPri : [];
+        
+        const rawPend = pendRes.data?.data?.items || pendRes.data?.items || pendRes.data?.data || pendRes.data;
+        const pendData = Array.isArray(rawPend) ? rawPend : [];
+        
+        const rawConst = constRes.data?.data || constRes.data;
+        const constData = Array.isArray(rawConst) ? rawConst : [];
 
         setSummary(sumData);
         setIncidents(incData);
@@ -159,7 +167,12 @@ export default function DashboardPage() {
   );
 }
 
-function OverviewDashboard({ summary, incidents, priority, pendingAssets, isLeader, handleApproval, processingId, handleAssignTask }) {
+function OverviewDashboard({ summary, incidents = [], priority = [], pendingAssets = [], isLeader, handleApproval, processingId, handleAssignTask }) {
+  // Đảm bảo là mảng
+  const safeIncidents = Array.isArray(incidents) ? incidents : [];
+  const safePriority = Array.isArray(priority) ? priority : [];
+  const safePending = Array.isArray(pendingAssets) ? pendingAssets : [];
+
   const statusData = (summary?.byStatus || []).map(s => ({
     name: STATUS_LABELS[s._id] || s._id,
     value: s.count,
@@ -172,7 +185,7 @@ function OverviewDashboard({ summary, incidents, priority, pendingAssets, isLead
     color: BAR_COLORS[i % BAR_COLORS.length],
   }));
 
-  const incidentData = (incidents || []).map((inc, i) => ({
+  const incidentData = safeIncidents.map((inc, i) => ({
     name: inc._id,
     total: inc.count,
     open: inc.open,
@@ -188,17 +201,17 @@ function OverviewDashboard({ summary, incidents, priority, pendingAssets, isLead
         <StatCard title="Sự cố đang xử lý" value={summary?.openIncidents || 0} icon="⚠️" color="from-amber-600/20 to-amber-500/10" borderColor="border-amber-500/20" />
       </div>
 
-      {pendingAssets.length > 0 && (
+      {safePending.length > 0 && (
         <div className="bg-surface-900 border border-amber-500/30 rounded-xl p-5 shadow-lg relative overflow-hidden">
           <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 rounded-bl-full pointer-events-none" />
           <h3 className="text-base font-semibold text-white mb-4 flex items-center gap-2 relative z-10">
             <span className="text-amber-400">⚡</span> Chờ Phê Duyệt Mới
             <span className="ml-2 text-xs bg-amber-500/20 text-amber-400 px-2.5 py-1 rounded-full font-bold">
-              {pendingAssets.length} yêu cầu
+              {safePending.length} yêu cầu
             </span>
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 relative z-10">
-            {pendingAssets.map((asset) => (
+            {safePending.map((asset) => (
               <div key={asset.id || asset._id} className="flex flex-col gap-3 p-4 bg-surface-800/50 hover:bg-surface-800 transition-colors rounded-lg border border-surface-700">
                 <div className="flex gap-3">
                   <div className="w-12 h-12 rounded-lg bg-surface-700 flex-shrink-0 overflow-hidden flex items-center justify-center text-xl">
@@ -294,12 +307,12 @@ function OverviewDashboard({ summary, incidents, priority, pendingAssets, isLead
           <h3 className="text-base font-semibold text-white mb-4 flex items-center gap-2">
             🚨 Cần Ưu Tiên Xử Lý / Giao Việc
             <span className="ml-auto text-xs bg-red-500/20 text-red-400 px-2 py-0.5 rounded-full font-bold">
-              {priority.length} điểm đen
+              {safePriority.length} điểm đen
             </span>
           </h3>
-          {priority.length > 0 ? (
+          {safePriority.length > 0 ? (
             <div className="space-y-3 flex-1 overflow-y-auto pr-2 custom-scrollbar max-h-[250px]">
-              {priority.map((asset) => (
+              {safePriority.map((asset) => (
                 <div key={asset.id || asset._id} className="flex items-center gap-3 p-3 bg-surface-800/40 hover:bg-surface-800 rounded-lg border border-surface-700/50 transition-colors">
                   <div className="w-2.5 h-2.5 bg-red-500 rounded-full flex-shrink-0 animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.6)]" />
                   <div className="min-w-0 flex-1">
@@ -331,10 +344,13 @@ function OverviewDashboard({ summary, incidents, priority, pendingAssets, isLead
   );
 }
 
-function ConstructionDashboard({ constructions }) {
-  const total = constructions.length;
-  const inProgress = constructions.filter(c => c.status === 'in_progress').length;
-  const resolved = constructions.filter(c => c.status === 'resolved').length;
+function ConstructionDashboard({ constructions = [] }) {
+  // Ép kiểu an toàn (Safe fallback)
+  const safeConstructions = Array.isArray(constructions) ? constructions : [];
+  
+  const total = safeConstructions.length;
+  const inProgress = safeConstructions.filter(c => c.status === 'in_progress').length;
+  const resolved = safeConstructions.filter(c => c.status === 'resolved').length;
   
   return (
     <div className="space-y-6 animate-fade-in">
@@ -379,7 +395,7 @@ function ConstructionDashboard({ constructions }) {
               </tr>
             </thead>
             <tbody className="divide-y divide-surface-800/50">
-              {constructions.map((task) => (
+              {safeConstructions.map((task) => (
                 <tr key={task.id || task._id} className="hover:bg-surface-800/30 transition-colors">
                   <td className="p-4">
                     <p className="text-sm font-semibold text-surface-100 line-clamp-1" title={task.title}>{task.title}</p>
@@ -413,7 +429,7 @@ function ConstructionDashboard({ constructions }) {
                   </td>
                 </tr>
               ))}
-              {constructions.length === 0 && (
+              {safeConstructions.length === 0 && (
                 <tr>
                   <td colSpan="5" className="p-8 text-center text-surface-500 text-sm">
                     Hiện tại không có dự án thi công nào.
