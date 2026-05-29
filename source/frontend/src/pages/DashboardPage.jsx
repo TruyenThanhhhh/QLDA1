@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { FileSpreadsheet, FileText } from 'lucide-react';
 import client from '../api/client';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -20,18 +21,22 @@ const CONSTRUCTION_STATUS = {
   resolved: { label: 'Đã hoàn thành', style: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' },
 };
 
-// Hình ảnh báo lỗi cục bộ (Tránh bị chặn bởi CORS web ngoài)
 const FALLBACK_IMAGE = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxNTAiIGhlaWdodD0iMTUwIj48cmVjdCB3aWR0aD0iMTUwIiBoZWlnaHQ9IjE1MCIgZmlsbD0iIzMzMyIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBkeT0iLjNlbSIgZmlsbD0iIzg4OCIgZm9udC1zaXplPSIyMCIgdGV4dC1hbmNob3I9Im1pZGRsZSI+SW1hZ2UgRXJyb3I8L3RleHQ+PC9zdmc+';
 
-// Hàm lấy link ảnh cực kỳ an toàn
+const getBaseUrl = () => {
+  if (client && client.defaults && client.defaults.baseURL) {
+    return client.defaults.baseURL;
+  }
+  return 'http://localhost:5000/api';
+};
+
 const getValidImageUrl = (photo) => {
   if (!photo) return '';
   if (photo.url && photo.url.startsWith('http')) return photo.url; 
   if (photo.path && (photo.path.startsWith('http') || photo.path.startsWith('data:image'))) return photo.path;
   
-  const baseUrl = 'http://localhost:5000'; // Đảm bảo đúng port backend của bạn
+  const baseUrl = getBaseUrl().replace('/api', '');
   
-  // Trích xuất CHÍNH XÁC tên file, loại bỏ các thư mục tuyệt đối thừa của Windows (C:\...)
   let fileName = photo.filename;
   if (!fileName && photo.path) {
     const normalizedPath = photo.path.replace(/\\/g, '/');
@@ -173,7 +178,6 @@ function TechnicianDashboard({ user }) {
 
   return (
     <div className="h-full overflow-hidden flex flex-col bg-surface-950 font-sans relative">
-      {/* Toast Notification */}
       {toast.isVisible && (
         <div className={`fixed top-4 right-4 z-[100] px-4 py-3 rounded-lg shadow-xl flex items-center gap-3 border animate-[slideIn_0.3s_ease-out] ${
           toast.type === 'error' ? 'bg-red-600/90 border-red-500/50 text-white' : 'bg-emerald-600/90 border-emerald-500/50 text-white'
@@ -360,7 +364,6 @@ function TechnicianDashboard({ user }) {
                     Tải ảnh nghiệm thu trực tuyến
                   </label>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-2">
-                    {/* Hiển thị ảnh cũ đã upload */}
                     {selectedTask.photos?.map((photo, idx) => (
                       <div key={`old-${idx}`} className="relative aspect-square rounded-lg overflow-hidden border border-surface-700">
                         <img src={getValidImageUrl(photo)} alt="Old file" className="w-full h-full object-cover opacity-70" onError={(e) => { e.target.onerror = null; e.target.src = FALLBACK_IMAGE; }} />
@@ -368,7 +371,6 @@ function TechnicianDashboard({ user }) {
                       </div>
                     ))}
 
-                    {/* Hiển thị ảnh đang chọn để upload */}
                     {uploadedFiles.map((fileObj, idx) => (
                       <div key={`new-${idx}`} className="relative aspect-square rounded-lg overflow-hidden border border-surface-700 group">
                         <img src={fileObj.preview} alt="Preview" className="w-full h-full object-cover" />
@@ -401,7 +403,7 @@ function TechnicianDashboard({ user }) {
 }
 
 // ==========================================
-// GIAO DIỆN 2: DÀNH CHO LÃNH ĐẠO (GIỮ NGUYÊN)
+// GIAO DIỆN 2: DÀNH CHO LÃNH ĐẠO / ADMIN 
 // ==========================================
 function LeaderDashboard({ user }) {
   const [currentTab, setCurrentTab] = useState('overview');
@@ -412,6 +414,8 @@ function LeaderDashboard({ user }) {
   const [pendingAssets, setPendingAssets] = useState([]);
   const [constructions, setConstructions] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isExportingExcel, setIsExportingExcel] = useState(false);
+  const [isExportingPDF, setIsExportingPDF] = useState(false);
   
   const [processingId, setProcessingId] = useState(null);
   const [confirmModal, setConfirmModal] = useState({ isOpen: false, assetId: null, status: null, assetName: '' });
@@ -460,7 +464,7 @@ function LeaderDashboard({ user }) {
 
   const showToast = (message, type = 'success') => {
     setToast({ isVisible: true, message, type });
-    setTimeout(() => setToast(prev => ({ ...prev, isVisible: false })), 3000);
+    setTimeout(() => setToast({ isVisible: false, message: '', type: 'success' }), 3000);
   };
 
   const handleOpenConfirm = (assetId, status, assetName) => {
@@ -525,19 +529,76 @@ function LeaderDashboard({ user }) {
     }
   };
 
-  const handleExportPDF = async () => {
+  // --- CẬP NHẬT CHUẨN MỰC: TẢI FILE BẰNG AXIOS BLOB (Không dính lỗi CORS/401) ---
+  const handleExportExcel = async () => {
+    if (isExportingExcel) return;
+    setIsExportingExcel(true);
+    showToast('Đang tạo tệp Excel, vui lòng đợi...', 'info');
+    
     try {
-      const response = await client.get('/tasks/export-pdf', { responseType: 'blob' });
+      // Dùng client (Axios) tải file nhị phân về. Client ĐÃ CÓ SẴN token trong Header.
+      const response = await client.get('/reports/export-excel', { 
+        responseType: 'blob' // Rất quan trọng!
+      });
+      
+      // Tạo URL ảo từ dữ liệu Blob trả về
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', 'BaoCao_ThongKe_HaTang.xlsx');
+      
+      // Giả lập click để trình duyệt tải file xuống
+      document.body.appendChild(link);
+      link.click();
+      
+      // Dọn dẹp bộ nhớ
+      link.parentNode.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      
+      showToast('Tải Excel thành công!', 'success');
+    } catch (error) {
+      console.error('Lỗi tải Excel:', error);
+      if (error.response?.status === 401 || error.response?.status === 403) {
+        showToast('Lỗi phân quyền hoặc phiên đăng nhập hết hạn!', 'error');
+      } else {
+        showToast('Không thể tải tệp Excel. Vui lòng kiểm tra lại server.', 'error');
+      }
+    } finally {
+      setIsExportingExcel(false);
+    }
+  };
+
+  const handleExportPDF = async () => {
+    if (isExportingPDF) return;
+    setIsExportingPDF(true);
+    showToast('Đang tạo tệp PDF, vui lòng đợi...', 'info');
+    
+    try {
+      const response = await client.get('/reports/export-pdf', { 
+        responseType: 'blob' 
+      });
+      
       const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', 'DanhSachThiCong.pdf');
+      link.setAttribute('download', 'BaoCao_ThongKe_HaTang.pdf');
+      
       document.body.appendChild(link);
       link.click();
+      
       link.parentNode.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      
+      showToast('Tải PDF thành công!', 'success');
     } catch (error) {
-      console.error('Lỗi xuất PDF:', error);
-      showToast('Không thể xuất file PDF lúc này.', 'error');
+      console.error('Lỗi tải PDF:', error);
+      if (error.response?.status === 401 || error.response?.status === 403) {
+        showToast('Lỗi phân quyền hoặc phiên đăng nhập hết hạn!', 'error');
+      } else {
+        showToast('Không thể tải tệp PDF. Vui lòng kiểm tra lại server.', 'error');
+      }
+    } finally {
+      setIsExportingPDF(false);
     }
   };
 
@@ -632,9 +693,9 @@ function LeaderDashboard({ user }) {
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 mb-2 border-b border-surface-800 pb-4">
           <div>
             <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-              📊 Dashboard Lãnh Đạo
+              📊 Dashboard Lãnh Đạo / Admin
             </h1>
-            <p className="text-surface-400 text-sm mt-1">Giám sát hạ tầng, tiến độ thi công và phê duyệt dự án</p>
+            <p className="text-surface-400 text-sm mt-1">Giám sát hạ tầng, tiến độ thi công và xuất báo cáo</p>
           </div>
           
           <div className="flex items-center gap-3">
@@ -649,11 +710,30 @@ function LeaderDashboard({ user }) {
               </button>
             </div>
 
+            {/* --- NÚT XUẤT BÁO CÁO THỐNG KÊ (EXCEL/PDF) --- */}
             {isLeader && (
-              <button onClick={handleExportPDF} className="bg-surface-800 hover:bg-surface-700 border border-surface-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-2 print:hidden">
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-                Xuất PDF
-              </button>
+              <div className="flex gap-2 print:hidden">
+                <button 
+                  onClick={handleExportExcel} 
+                  disabled={isExportingExcel}
+                  className="bg-emerald-600/20 hover:bg-emerald-500/30 border border-emerald-500/50 text-emerald-400 px-3 py-2 rounded-lg text-sm font-medium transition flex items-center gap-2 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isExportingExcel ? (
+                    <span className="w-4 h-4 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin"></span>
+                  ) : <FileSpreadsheet size={16} />}
+                  <span className="hidden sm:inline">{isExportingExcel ? 'Đang tải...' : 'Xuất Excel'}</span>
+                </button>
+                <button 
+                  onClick={handleExportPDF} 
+                  disabled={isExportingPDF}
+                  className="bg-red-600/20 hover:bg-red-500/30 border border-red-500/50 text-red-400 px-3 py-2 rounded-lg text-sm font-medium transition flex items-center gap-2 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isExportingPDF ? (
+                    <span className="w-4 h-4 border-2 border-red-400 border-t-transparent rounded-full animate-spin"></span>
+                  ) : <FileText size={16} />}
+                  <span className="hidden sm:inline">{isExportingPDF ? 'Đang tải...' : 'Xuất PDF'}</span>
+                </button>
+              </div>
             )}
           </div>
         </div>
@@ -678,7 +758,7 @@ function LeaderDashboard({ user }) {
   );
 }
 
-// Các Component con của Lãnh Đạo giữ nguyên
+// Các Component con của Lãnh Đạo
 function OverviewDashboard({ summary, incidents = [], priority = [], pendingAssets = [], isLeader, handleApproval, processingId, handleAssignTask }) {
   const safeIncidents = Array.isArray(incidents) ? incidents : [];
   const safePriority = Array.isArray(priority) ? priority : [];

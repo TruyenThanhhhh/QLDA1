@@ -1,14 +1,23 @@
 const express = require('express');
 const router = express.Router();
 const auth = require('../middleware/auth');
-const ctrl = require('../controllers/report.controller');
 const rbac = require('../middleware/rbac');
+const reportCtrl = require('../controllers/report.controller');
 
-// ĐÃ SỬA: Thêm 'leader' vào danh sách phân quyền để tài khoản Lãnh đạo có thể xem báo cáo
-router.get('/summary', auth, rbac('admin', 'technician', 'leader'), ctrl.getSummary);
-router.get('/incidents', auth, rbac('admin', 'technician', 'leader'), ctrl.getIncidentsByArea);
-router.get('/priority', auth, rbac('admin', 'technician', 'leader'), ctrl.getPriorityList);
+// Bắt buộc đăng nhập cho tất cả các route báo cáo
+router.use(auth);
 
-router.get('/routing', auth, ctrl.getOptimalRoute); // Ai cũng xem được lộ trình
+// Các route thống kê chung
+router.get('/summary', reportCtrl.getSummary);
+router.get('/incidents', reportCtrl.getIncidentsByArea);
+router.get('/priority', reportCtrl.getPriorityList);
+router.get('/optimal-route', reportCtrl.getOptimalRoute);
+
+// ==========================================
+// THÊM 2 ROUTE XUẤT FILE CHO ADMIN/LEADER
+// ==========================================
+// Chỉ Admin và Leader mới được quyền xuất báo cáo
+router.get('/export-excel', rbac('admin', 'leader'), reportCtrl.exportExcel);
+router.get('/export-pdf', rbac('admin', 'leader'), reportCtrl.exportPDF);
 
 module.exports = router;

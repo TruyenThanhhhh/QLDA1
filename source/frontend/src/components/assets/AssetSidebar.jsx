@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
+import { useNavigate } from 'react-router-dom'; // ĐÃ THÊM
 
 const typeIcons = {
   road: '🛣️', sign: '🪧', traffic_light: '🚦', 
@@ -27,23 +28,19 @@ export default function AssetSidebar({
   selectedAssetId,
   onRouteFound 
 }) {
-  // Lấy thông tin user hiện tại từ context
   const { hasRole, user } = useAuth(); 
+  const navigate = useNavigate(); // ĐÃ THÊM Hook chuyển trang
+
   const [osmResults, setOsmResults] = useState([]);
   const [isSearchingOSM, setIsSearchingOSM] = useState(false);
-  
-  // State cho chức năng tìm đường nội bộ trong Sidebar
   const [routingMode, setRoutingMode] = useState(false);
   const [startQuery, setStartQuery] = useState('');
   const [startCoords, setStartCoords] = useState(null);
   const [routeError, setRouteError] = useState('');
   const [isRouting, setIsRouting] = useState(false);
-  
-  // State mới cho Gợi ý địa điểm (Autocomplete) tại ô Điểm đi
   const [routeSuggestions, setRouteSuggestions] = useState([]);
   const [showRouteSuggestions, setShowRouteSuggestions] = useState(false);
 
-  // Debounce tìm kiếm mờ (Fuzzy Search) cho thanh Search chính
   useEffect(() => {
     const search = filters.search?.trim();
     if (!search || search.length < 2) {
@@ -71,13 +68,12 @@ export default function AssetSidebar({
               status: 'none',
               geometry: {
                 type: 'Point',
-                coordinates: [f.geometry.coordinates[0], f.geometry.coordinates[1]] // [lng, lat]
+                coordinates: [f.geometry.coordinates[0], f.geometry.coordinates[1]] 
               },
               fullAddress: address
             };
           }).filter(item => item.name !== 'Địa điểm');
 
-          // Lọc trùng lặp
           const uniqueOsm = [];
           const seenNames = new Set();
           formattedOsm.forEach(item => {
@@ -99,11 +95,8 @@ export default function AssetSidebar({
     return () => clearTimeout(timer);
   }, [filters.search]);
 
-  // Debounce tìm kiếm mờ (Fuzzy Search) cho ô nhập ĐIỂM ĐI
   useEffect(() => {
     const query = startQuery?.trim();
-    
-    // Không tìm nếu rỗng, quá ngắn, hoặc đang chọn vị trí hiện tại/đã có tọa độ
     if (!query || query.length < 2 || query === 'Vị trí của bạn' || startCoords !== null) {
       setRouteSuggestions([]);
       setShowRouteSuggestions(false);
@@ -128,7 +121,6 @@ export default function AssetSidebar({
             };
           }).filter(item => item.name !== 'Địa điểm');
 
-          // Lọc trùng lặp
           const unique = [];
           const seen = new Set();
           formatted.forEach(item => {
@@ -151,7 +143,6 @@ export default function AssetSidebar({
     return () => clearTimeout(timer);
   }, [startQuery, startCoords]);
 
-  // Reset routing mode khi chọn tài sản khác
   useEffect(() => {
     setRoutingMode(false);
     setStartQuery('');
@@ -159,7 +150,7 @@ export default function AssetSidebar({
     setRouteError('');
     setShowRouteSuggestions(false);
     if (onRouteFound) onRouteFound(null);
-    window.dispatchEvent(new CustomEvent('map:clearRoute')); // Xóa đường trên Map
+    window.dispatchEvent(new CustomEvent('map:clearRoute')); 
   }, [selectedAssetId]);
 
   const handleSearchChange = (e) => {
@@ -200,7 +191,7 @@ export default function AssetSidebar({
       return;
     }
 
-    const endCoords = destinationAsset.geometry?.coordinates; // [lng, lat]
+    const endCoords = destinationAsset.geometry?.coordinates; 
     if (!endCoords) {
       setRouteError('Địa điểm này không có tọa độ hợp lệ.');
       return;
@@ -210,7 +201,6 @@ export default function AssetSidebar({
     try {
       let currentStartCoords = startCoords;
       
-      // Fallback: Nếu user nhập tay nhưng ko click vào suggestion nào, gọi API tìm điểm đi
       if (!currentStartCoords && startQuery !== 'Vị trí của bạn') {
         const res = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(startQuery)}&bbox=107.8,15.9,108.4,16.2&limit=1`);
         const data = await res.json();
@@ -228,11 +218,9 @@ export default function AssetSidebar({
       }
 
       if (currentStartCoords) {
-        // Lấy danh sách điểm đang hỏng để né (bán kính né mỗi điểm là 50m)
         const damagedPoints = assets.filter(a => a.status === 'damaged' && a.geometry?.type === 'Point');
         const nogos = damagedPoints.map(a => `${a.geometry.coordinates[0]},${a.geometry.coordinates[1]},50`).join('|');
 
-        // BRouter API hỗ trợ né các điểm bằng tham số nogos
         let brouterUrl = `https://brouter.de/brouter?lonlats=${currentStartCoords.lng},${currentStartCoords.lat}|${endCoords[0]},${endCoords[1]}&profile=car-fast&alternativeidx=0&format=geojson`;
         if (nogos) {
           brouterUrl += `&nogos=${nogos}`;
@@ -247,15 +235,13 @@ export default function AssetSidebar({
               if (onRouteFound) onRouteFound(geometry);
               window.dispatchEvent(new CustomEvent('map:routeFound', { detail: geometry }));
               setIsRouting(false);
-              return; // Vẽ xong bằng BRouter, thoát hàm.
+              return; 
             }
           }
         } catch (err) {
           console.warn("BRouter failed, falling back to OSRM", err);
         }
 
-        // --- FALLBACK ---
-        // Nếu BRouter lỗi hoặc không tìm được đường, fallback dùng OSRM (không né được sự cố)
         const osrmRes = await fetch(`https://router.project-osrm.org/route/v1/driving/${currentStartCoords.lng},${currentStartCoords.lat};${endCoords[0]},${endCoords[1]}?overview=full&geometries=geojson`);
         const routeData = await osrmRes.json();
         
@@ -279,6 +265,16 @@ export default function AssetSidebar({
       <div className="p-4 border-b border-surface-700/50 flex-shrink-0">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-lg font-semibold text-white">Tra cứu Bản đồ</h2>
+          
+          {/* ĐÃ THÊM: Nút Quản trị User dành riêng cho Admin */}
+          {user?.role === 'admin' && (
+            <button 
+              onClick={() => navigate('/users')}
+              className="bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold px-2 py-1.5 rounded-md shadow-sm transition-colors flex items-center gap-1"
+            >
+              ⚙️ QUẢN TRỊ
+            </button>
+          )}
         </div>
 
         <input

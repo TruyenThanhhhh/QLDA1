@@ -32,19 +32,21 @@ function AppRoutes() {
     <Routes>
       <Route path="/login" element={user ? <Navigate to="/" replace /> : <LoginPage />} />
       <Route path="/register" element={user ? <Navigate to="/" replace /> : <RegisterPage />} />
+      
       <Route path="/" element={
         <ProtectedRoute>
           <MainLayout />
         </ProtectedRoute>
       }>
         <Route index element={<MapPage />} />
+        
         <Route path="dashboard" element={
-          // ĐÃ SỬA: Cho phép 'leader' vào Dashboard
           ['admin', 'technician', 'leader'].includes(user?.role)
             ? <DashboardPage /> 
             : <Navigate to="/" replace />
         } />
-      </Route>
+      </Route> 
+
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
