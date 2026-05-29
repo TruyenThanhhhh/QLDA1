@@ -1,5 +1,5 @@
-import { MapContainer, TileLayer, useMap } from 'react-leaflet';
-import { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
+import { MapContainer, TileLayer, useMap, Polyline } from 'react-leaflet';
 import L from 'leaflet';
 import AssetLayer from './AssetLayer';
 import AreaLayer from './AreaLayer';
@@ -13,7 +13,6 @@ function FitBounds({ assets, areas, showAreaLayer }) {
 
   useEffect(() => {
     const allCoords = [];
-
     if (assets) {
       assets.forEach(asset => {
         if (asset.geometry?.type !== 'Point') return;
@@ -22,16 +21,13 @@ function FitBounds({ assets, areas, showAreaLayer }) {
         allCoords.push(coords);
       });
     }
-
     if (showAreaLayer && areas) {
       areas.forEach(area => {
         const coords = convertGeometry(area.geometry);
         if (!coords) return;
-
         coords.forEach(ring => allCoords.push(...ring));
       });
     }
-
     if (allCoords.length > 0) {
       const frame = requestAnimationFrame(() => {
         const bounds = L.latLngBounds(allCoords);
@@ -49,14 +45,9 @@ function FocusAsset({ asset }) {
 
   useEffect(() => {
     if (!asset?.geometry || asset.geometry.type !== 'Point') return;
-
     const coords = convertGeometry(asset.geometry);
     if (!coords) return;
-
-    map.flyTo(coords, Math.max(map.getZoom(), 16), {
-      animate: true,
-      duration: 0.6,
-    });
+    map.flyTo(coords, Math.max(map.getZoom(), 16), { animate: true, duration: 0.6 });
   }, [asset, map]);
 
   return null;
@@ -64,12 +55,10 @@ function FocusAsset({ asset }) {
 
 function SyncMapSize() {
   const map = useMap();
-
   useEffect(() => {
     const container = map.getContainer();
     const syncSize = () => map.invalidateSize({ animate: false });
     syncSize();
-
     if (typeof ResizeObserver !== 'undefined') {
       const observer = new ResizeObserver(syncSize);
       observer.observe(container);
@@ -77,11 +66,8 @@ function SyncMapSize() {
     }
     return undefined;
   }, [map]);
-
   return null;
 }
-
-import { Polyline } from 'react-leaflet';
 
 function MapEvents({
   assets,
@@ -95,7 +81,7 @@ function MapEvents({
   showAreaLayer,
   routePolyline,
 }) {
-  // OSRM GeoJSON trả về [lon, lat], react-leaflet Polyline cần [lat, lon]
+  // OSRM trả về [lon, lat], Polyline cần [lat, lon]
   const polylinePositions = routePolyline?.coordinates 
     ? routePolyline.coordinates.map(coord => [coord[1], coord[0]])
     : [];
@@ -117,7 +103,7 @@ function MapEvents({
       {polylinePositions.length > 0 && (
         <Polyline 
           positions={polylinePositions} 
-          pathOptions={{ color: '#3b82f6', weight: 4, opacity: 0.8, dashArray: '10, 10' }} 
+          pathOptions={{ color: '#3b82f6', weight: 6, opacity: 0.8, dashArray: '10, 10' }} 
         />
       )}
     </>
@@ -136,33 +122,53 @@ export default function Map({
   onLocationPicked,
   pickerPosition = null,
   showAreaLayer = false,
-  routePolyline = null,
+  routePolyline = null, // Prop dự phòng
 }) {
-  return (
-    <MapContainer
-      center={center}
-      zoom={zoom}
-      className="w-full h-full"
-      zoomControl={true}
-    >
-      <TileLayer
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-        url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-      />
+  const [eventRoute, setEventRoute] = useState(null);
 
-      <MapEvents
-        assets={assets}
-        areas={areas}
-        focusAsset={focusAsset}
-        selectedAssetId={selectedAssetId}
-        isPickingLocation={isPickingLocation}
-        onLocationPicked={onLocationPicked}
-        onAssetClick={onAssetClick}
-        pickerPosition={pickerPosition}
-        showAreaLayer={showAreaLayer}
-        routePolyline={routePolyline}
-      />
-    </MapContainer>
+  // Lắng nghe sự kiện vẽ đường từ AssetSidebar mà không cần thông qua Component cha
+  useEffect(() => {
+    const handleRoute = (e) => setEventRoute(e.detail);
+    const handleClear = () => setEventRoute(null);
+    
+    window.addEventListener('map:routeFound', handleRoute);
+    window.addEventListener('map:clearRoute', handleClear);
+    
+    return () => {
+      window.removeEventListener('map:routeFound', handleRoute);
+      window.removeEventListener('map:clearRoute', handleClear);
+    };
+  }, []);
+
+  const activeRoute = routePolyline || eventRoute;
+
+  return (
+    <div className="relative w-full h-full min-h-[500px]">
+      <MapContainer
+        center={center}
+        zoom={zoom}
+        className="w-full h-full z-0 absolute inset-0"
+        zoomControl={true}
+      >
+        <TileLayer
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+          url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+        />
+
+        <MapEvents
+          assets={assets}
+          areas={areas}
+          focusAsset={focusAsset}
+          selectedAssetId={selectedAssetId}
+          isPickingLocation={isPickingLocation}
+          onLocationPicked={onLocationPicked}
+          onAssetClick={onAssetClick}
+          pickerPosition={pickerPosition}
+          showAreaLayer={showAreaLayer}
+          routePolyline={activeRoute}
+        />
+      </MapContainer>
+    </div>
   );
 }
 

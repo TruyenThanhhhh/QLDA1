@@ -16,7 +16,8 @@ export default function LoginPage() {
     setLoading(true);
     try {
       const userData = await login(username, password);
-      if (userData.role === 'admin' || userData.role === 'technician') {
+      // Bổ sung role 'leader' vào danh sách được vào Dashboard
+      if (userData.role === 'admin' || userData.role === 'technician' || userData.role === 'leader') {
         navigate('/dashboard');
       } else {
         navigate('/');
@@ -105,9 +106,11 @@ export default function LoginPage() {
 
           <div className="mt-6 pt-6 border-t border-surface-700/50">
             <p className="text-surface-500 text-xs text-center mb-3">Tài khoản demo</p>
-            <div className="grid grid-cols-3 gap-2 text-xs">
+            {/* Chuyển grid-cols-3 thành grid-cols-2 để hiển thị đẹp 4 tài khoản */}
+            <div className="grid grid-cols-2 gap-2 text-xs">
               {[
                 { user: 'admin', pass: 'admin123', role: 'Quản trị' },
+                { user: 'lanhdao', pass: 'leader123', role: 'Lãnh đạo' }, // Đã thêm role lãnh đạo
                 { user: 'kythuat', pass: 'kythuat123', role: 'Kỹ thuật' },
                 { user: 'nhandan', pass: 'user123', role: 'Công dân' },
               ].map((demo) => (
