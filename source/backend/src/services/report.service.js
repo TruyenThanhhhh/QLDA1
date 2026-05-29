@@ -80,16 +80,37 @@ const getIncidentsByArea = async () => {
 };
 
 const getPriorityList = async () => {
+  // 1. Tìm các dự án/sự cố ĐÃ ĐƯỢC GIAO VIỆC (Có KTV phụ trách)
+  const assignedTasks = await MaintenanceRecord.find({
+    status: { $in: ['open', 'in_progress'] },
+    performedBy: { $exists: true, $ne: null }
+  }).populate('performedBy', 'fullName').select('assetId performedBy');
+
+  // Map dữ liệu ai đang làm tài sản nào
+  const assignedMap = {};
+  assignedTasks.forEach(task => {
+    if (task.assetId) {
+      assignedMap[task.assetId.toString()] = task.performedBy?.fullName || 'KTV';
+    }
+  });
+
+  // 2. Lấy TẤT CẢ các tài sản HƯ HỎNG, ĐÃ DUYỆT (Hiển thị tất cả để Lãnh đạo nắm được)
   const assets = await Asset.find({
     status: 'damaged',
     isDeleted: { $ne: true },
-    approvalStatus: 'approved' // Chỉ lấy tài sản đã duyệt
+    approvalStatus: 'approved'
   })
     .populate('managedAreaId', 'code name')
     .sort({ updatedAt: 1 })
     .limit(20);
 
-  return assets;
+  // 3. Đính kèm trạng thái "Đã giao việc" (isAssigned) để báo cho Frontend
+  return assets.map(asset => {
+    const obj = asset.toObject();
+    obj.isAssigned = !!assignedMap[obj._id.toString()];
+    obj.assigneeName = assignedMap[obj._id.toString()] || null;
+    return obj;
+  });
 };
 
 module.exports = { getSummary, getIncidentsByArea, getPriorityList };

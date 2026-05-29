@@ -400,7 +400,7 @@ const generateMaintenanceRecords = (assetIds, userIds) => {
     { type: 'maintenance', desc: 'Son lai be mat, ve sinh', sev: 'low' },
     { type: 'maintenance', desc: 'Thay the bong den LED', sev: 'medium' },
     { type: 'maintenance', desc: 'Sua chua be mat duong, va o ga', sev: 'medium' },
-    { type: 'maintenance', desc: 'Kiem tra dinh ky, thay the linh kien', sev: 'low' },
+    { type: 'maintenance', desc: 'Kiem tra dinh ky, thay fixed le linh kien', sev: 'low' },
     { type: 'maintenance', desc: 'Nang cap he thong cam bien', sev: 'medium' },
     { type: 'incident', desc: 'Ran nut lon do xe tai nang', sev: 'high' },
     { type: 'maintenance', desc: 'Lap dat them he thong thoat nuoc', sev: 'medium' },
@@ -409,20 +409,28 @@ const generateMaintenanceRecords = (assetIds, userIds) => {
     { type: 'maintenance', desc: 'Thay the nap cong moi', sev: 'medium' },
   ];
 
-  const statuses = ['open', 'in_progress', 'resolved', 'cancelled'];
+  // Các trạng thái tương ứng với 3 cột trên frontend
+  const uiStatuses = ['open', 'in_progress', 'resolved'];
   const damagedAssets = assetIds.filter((_, i) => i % 3 === 0 || i % 5 === 0);
 
-  for (let i = 0; i < Math.min(20, damagedAssets.length); i++) {
+  // Gán việc cho Kỹ thuật viên (index 2) và người báo cáo (Người dân, index 3)
+  const technicianId = userIds[2];
+  const citizenId = userIds[3];
+
+  for (let i = 0; i < Math.min(15, damagedAssets.length); i++) {
     const d = descriptions[i % descriptions.length];
-    const status = statuses[Math.floor(Math.random() * statuses.length)];
+    
+    // Cố tình phân bổ đều task vào 3 cột trên bảng Kanban
+    const status = uiStatuses[i % 3]; 
+
     records.push({
       assetId: damagedAssets[i],
       recordType: d.type,
       title: d.desc,
       description: `${d.desc} (Chi tiet quan sat tai hien truong)`,
       severity: d.sev,
-      reportedBy: userIds[Math.floor(Math.random() * userIds.length)],
-      performedBy: userIds[1],
+      reportedBy: citizenId,
+      performedBy: technicianId, // <--- ĐÃ SỬA: Gán chính xác cho kỹ thuật viên
       costEstimate: Math.floor(Math.random() * 50000000) + 1000000,
       costActual: status === 'resolved'
         ? Math.floor(Math.random() * 50000000) + 1000000
@@ -459,7 +467,7 @@ const seed = async () => {
     console.log(`  Created ${createdAreas.length} areas`);
 
     console.log('Seeding assets...');
-    const assetsData = generateAssets(areaIds, userIds); // Truyền thêm userIds vào đây
+    const assetsData = generateAssets(areaIds, userIds); 
     const createdAssets = await Asset.insertMany(assetsData);
     console.log(`  Created ${createdAssets.length} assets`);
 
@@ -472,7 +480,7 @@ const seed = async () => {
     console.log('\n=== Seed completed ===');
     console.log('Login credentials:');
     console.log('  admin / admin123 (Admin)');
-    console.log('  lanhdao / leader123 (Leader)'); // Log tài khoản lanhdao
+    console.log('  lanhdao / leader123 (Leader)'); 
     console.log('  kythuat / kythuat123 (Technician)');
     console.log('  nhandan / user123 (Citizen)');
 

@@ -47,7 +47,9 @@ const getAllTasks = async (query = {}) => {
       status: obj.status,
       progress: progress,
       assignee: obj.performedBy?.fullName || 'Chưa phân công',
-      startDate: obj.recordedAt ? new Date(obj.recordedAt).toLocaleDateString('vi-VN') : 'N/A'
+      startDate: obj.recordedAt ? new Date(obj.recordedAt).toLocaleDateString('vi-VN') : 'N/A',
+      notes: obj.notes,        // Trả về ghi chú
+      photos: obj.photos       // Trả về mảng hình ảnh
     };
   });
 };
@@ -144,9 +146,9 @@ const assignTaskByAssetId = async (assetId, technicianId, user) => {
 
   const before = record.toObject();
 
-  // Cập nhật người xử lý và trạng thái thành "Đang thi công"
+  // ĐÃ SỬA: Chỉ cập nhật người xử lý, giữ nguyên trạng thái là 'open' (Mới nhận / Chờ xử lý)
   record.performedBy = technicianId;
-  record.status = 'in_progress';
+  record.status = 'open'; 
   record.updatedBy = user._id;
   await record.save();
 
