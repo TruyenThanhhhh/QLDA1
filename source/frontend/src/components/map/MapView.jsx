@@ -1,6 +1,6 @@
+import React, { useEffect } from 'react';
 import { MapContainer, TileLayer, Marker, Polyline, Polygon, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
-import { useEffect } from 'react';
 import {
   convertPoint,
   convertLineString,
@@ -272,30 +272,32 @@ function AssetRenderer({ assets, selectedAssetId, onAssetClick }) {
   );
 }
 
-export default function MapView({ assets, onAssetClick, selectedAssetId, selectedAsset }) {
+export default function MapView({ assets = [], onAssetClick, selectedAssetId, selectedAsset }) {
   const center = [16.0544, 108.2022];
 
   return (
-    <MapContainer
-      center={center}
-      zoom={13}
-      className="w-full h-full"
-      zoomControl={true}
-    >
-      <TileLayer
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-        url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-      />
+    <div className="relative w-full h-full min-h-[500px]">
+      <MapContainer
+        center={center}
+        zoom={13}
+        className="w-full h-full absolute inset-0 z-0"
+        zoomControl={true}
+      >
+        <TileLayer
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+          url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+        />
 
-      <SyncMapSize />
-      <FitBounds assets={assets} />
-      <FocusSelectedAsset asset={selectedAsset} />
-      <AssetRenderer
-        assets={assets}
-        selectedAssetId={selectedAssetId}
-        onAssetClick={onAssetClick}
-      />
-    </MapContainer>
+        <SyncMapSize />
+        <FitBounds assets={assets} />
+        <FocusSelectedAsset asset={selectedAsset} />
+        <AssetRenderer
+          assets={assets}
+          selectedAssetId={selectedAssetId}
+          onAssetClick={onAssetClick}
+        />
+      </MapContainer>
+    </div>
   );
 }
 
