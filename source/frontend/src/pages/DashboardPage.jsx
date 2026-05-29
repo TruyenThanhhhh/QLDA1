@@ -27,66 +27,139 @@ export default function DashboardPage() {
   const [pendingAssets, setPendingAssets] = useState([]);
   const [constructions, setConstructions] = useState([]);
   const [loading, setLoading] = useState(true);
+  
   const [processingId, setProcessingId] = useState(null);
+  const [confirmModal, setConfirmModal] = useState({ isOpen: false, assetId: null, status: null, assetName: '' });
+  
+  // --- STATE CHO MODAL GIAO VIỆC ---
+  const [assignModal, setAssignModal] = useState({ isOpen: false, assetId: null, assetName: '' });
+  const [technicians, setTechnicians] = useState([]);
+  const [selectedTech, setSelectedTech] = useState('');
+
+  const [toast, setToast] = useState({ isVisible: false, message: '', type: 'success' });
+
+  const fetchDashboardData = async () => {
+    try {
+      const [sumRes, incRes, priRes, pendRes, constRes] = await Promise.all([
+        client.get('/reports/summary'),
+        client.get('/reports/incidents'),
+        client.get('/reports/priority'),
+        client.get('/assets', { params: { approvalStatus: 'pending', limit: 10 } }),
+        client.get('/tasks')
+      ]);
+      
+      const sumData = sumRes.data?.data || sumRes.data || null;
+      const rawInc = incRes.data?.data || incRes.data;
+      const incData = Array.isArray(rawInc) ? rawInc : [];
+      const rawPri = priRes.data?.data || priRes.data;
+      const priData = Array.isArray(rawPri) ? rawPri : [];
+      const rawPend = pendRes.data?.data?.items || pendRes.data?.items || pendRes.data?.data || pendRes.data;
+      const pendData = Array.isArray(rawPend) ? rawPend : [];
+      const rawConst = constRes.data?.data || constRes.data;
+      const constData = Array.isArray(rawConst) ? rawConst : [];
+
+      setSummary(sumData);
+      setIncidents(incData);
+      setPriority(priData);
+      setPendingAssets(pendData);
+      setConstructions(constData);
+    } catch (err) {
+      console.error('Lỗi khi tải dữ liệu Dashboard:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchAll = async () => {
-      try {
-        const [sumRes, incRes, priRes, pendRes, constRes] = await Promise.all([
-          client.get('/reports/summary'),
-          client.get('/reports/incidents'),
-          client.get('/reports/priority'),
-          client.get('/assets', { params: { approvalStatus: 'pending', limit: 10 } }),
-          client.get('/tasks') // ĐÃ SỬA TẠI ĐÂY: Khớp chuẩn với Backend
-        ]);
-        
-        // --- BÓC TÁCH DỮ LIỆU AN TOÀN (SAFE FALLBACK) ---
-        const sumData = sumRes.data?.data || sumRes.data || null;
-        
-        const rawInc = incRes.data?.data || incRes.data;
-        const incData = Array.isArray(rawInc) ? rawInc : [];
-        
-        const rawPri = priRes.data?.data || priRes.data;
-        const priData = Array.isArray(rawPri) ? rawPri : [];
-        
-        const rawPend = pendRes.data?.data?.items || pendRes.data?.items || pendRes.data?.data || pendRes.data;
-        const pendData = Array.isArray(rawPend) ? rawPend : [];
-        
-        const rawConst = constRes.data?.data || constRes.data;
-        const constData = Array.isArray(rawConst) ? rawConst : [];
-
-        setSummary(sumData);
-        setIncidents(incData);
-        setPriority(priData);
-        setPendingAssets(pendData);
-        setConstructions(constData);
-      } catch (err) {
-        console.error('Lỗi khi tải dữ liệu Dashboard:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchAll();
+    fetchDashboardData();
   }, []);
 
-  const handleApproval = async (assetId, status) => {
-    if (!window.confirm(`Bạn có chắc chắn muốn ${status === 'approved' ? 'DUYỆT' : 'TỪ CHỐI'} tài sản này?`)) return;
-    
+  const showToast = (message, type = 'success') => {
+    setToast({ isVisible: true, message, type });
+    setTimeout(() => setToast(prev => ({ ...prev, isVisible: false })), 3000);
+  };
+
+  const handleOpenConfirm = (assetId, status, assetName) => {
+    setConfirmModal({ isOpen: true, assetId, status, assetName });
+  };
+
+  const executeApproval = async () => {
+    const { assetId, status } = confirmModal;
+    setConfirmModal({ isOpen: false, assetId: null, status: null, assetName: '' });
     setProcessingId(assetId);
+
     try {
-      await client.put(`/assets/${assetId}/approval`, { approvalStatus: status });
+      await client.patch(`/assets/${assetId}/approval`, { approvalStatus: status });
       setPendingAssets(prev => prev.filter(item => (item.id || item._id) !== assetId));
-      alert(status === 'approved' ? '✅ Đã phê duyệt thành công' : '❌ Đã từ chối tài sản');
+
+      if (status === 'approved') {
+        showToast('Đã phê duyệt thành công!', 'success');
+      } else {
+        showToast('Đã từ chối tài sản!', 'error');
+      }
+
+      await fetchDashboardData(); // Cập nhật lại dữ liệu sau khi duyệt
     } catch (error) {
       console.error('Lỗi phê duyệt:', error);
-      alert('Đã xảy ra lỗi khi xử lý. Vui lòng thử lại.');
+      showToast('Đã xảy ra lỗi khi xử lý.', 'error');
     } finally {
       setProcessingId(null);
     }
   };
 
-  const handleAssignTask = (assetId) => {
-    alert(`Mở giao diện phân công kỹ thuật viên cho sự cố ID: ${assetId}`);
+  // --- MỞ MODAL & TẢI DANH SÁCH KỸ THUẬT VIÊN ---
+  const handleAssignTask = async (assetId, assetName) => {
+    setAssignModal({ isOpen: true, assetId, assetName });
+    try {
+      // ĐÃ SỬA: Gọi đúng đường dẫn backend sinh ra
+      const res = await client.get('/technicians');
+      setTechnicians(res.data?.data || res.data || []);
+    } catch (err) {
+      console.error('Lỗi tải danh sách KTV', err);
+      showToast('Không thể tải danh sách KTV', 'error');
+    }
+  };
+
+  // --- THỰC THI GIAO VIỆC GỌI API ---
+  const executeAssign = async () => {
+    if (!selectedTech) {
+      showToast('Vui lòng chọn một kỹ thuật viên', 'error');
+      return;
+    }
+    
+    setProcessingId(assignModal.assetId);
+    try {
+      // ĐÃ SỬA: Gọi đúng đường dẫn backend sinh ra
+      await client.patch(`/assign-by-asset/${assignModal.assetId}`, { technicianId: selectedTech });
+      showToast('Đã giao việc thành công!', 'success');
+      
+      // Đóng modal & reset
+      setAssignModal({ isOpen: false, assetId: null, assetName: '' });
+      setSelectedTech('');
+      
+      await fetchDashboardData(); // Cập nhật lại biểu đồ và tab Thi công
+    } catch (error) {
+      console.error('Lỗi giao việc:', error);
+      showToast(error.response?.data?.message || 'Lỗi: Không có sự cố nào đang chờ xử lý.', 'error');
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  const handleExportPDF = async () => {
+    try {
+      const response = await client.get('/tasks/export-pdf', { responseType: 'blob' });
+      const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', 'DanhSachThiCong.pdf');
+      document.body.appendChild(link);
+      link.click();
+      link.parentNode.removeChild(link);
+    } catch (error) {
+      console.error('Lỗi xuất PDF:', error);
+      showToast('Không thể xuất file PDF lúc này.', 'error');
+    }
   };
 
   if (loading) {
@@ -103,9 +176,101 @@ export default function DashboardPage() {
   const isLeader = user?.role === 'leader' || user?.role === 'admin';
 
   return (
-    <div className="h-full overflow-y-auto p-6 font-sans bg-surface-950">
-      <div className="max-w-7xl mx-auto space-y-6">
-        
+    <div className="h-full overflow-y-auto p-6 font-sans bg-surface-950 relative">
+      
+      {/* --- TOAST NOTIFICATION --- */}
+      {toast.isVisible && (
+        <div className={`fixed top-4 right-4 z-[60] px-4 py-3 rounded-lg shadow-xl flex items-center gap-3 border animate-[slideIn_0.3s_ease-out] ${
+          toast.type === 'success' ? 'bg-emerald-600/90 border-emerald-500/50 text-white' : 
+          toast.type === 'error' ? 'bg-red-600/90 border-red-500/50 text-white' : 
+          'bg-blue-600/90 border-blue-500/50 text-white'
+        }`}>
+           {toast.type === 'success' && <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>}
+           {toast.type === 'error' && <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>}
+           {toast.type === 'info' && <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
+           <p className="text-sm font-medium">{toast.message}</p>
+        </div>
+      )}
+
+      {/* --- MODAL GIAO VIỆC CHO KỸ THUẬT VIÊN --- */}
+      {assignModal.isOpen && (
+        <div className="fixed inset-0 z-[55] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-[fadeIn_0.2s_ease-out]">
+          <div className="bg-surface-900 border border-surface-700 p-6 rounded-xl shadow-2xl max-w-sm w-full mx-4 animate-[slideUp_0.3s_ease-out]">
+            <h3 className="text-lg font-bold text-white mb-2 flex items-center gap-2">
+              <span className="text-purple-400">👷</span> Phân công Kỹ thuật viên
+            </h3>
+            <p className="text-sm text-surface-300 mb-4">
+              Giao xử lý sự cố tại: <strong className="text-white block mt-1">"{assignModal.assetName}"</strong>
+            </p>
+            
+            <div className="mb-6">
+              <label className="block text-xs font-medium text-surface-400 mb-2 uppercase tracking-wider">Chọn người phụ trách</label>
+              <select 
+                value={selectedTech}
+                onChange={(e) => setSelectedTech(e.target.value)}
+                className="w-full bg-surface-800 text-surface-200 text-sm border border-surface-600 rounded-lg px-3 py-2.5 focus:outline-none focus:border-purple-500 transition-colors"
+              >
+                <option value="">-- Chọn kỹ thuật viên --</option>
+                {technicians.map(t => (
+                  <option key={t._id || t.id} value={t._id || t.id}>{t.fullName}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex justify-end gap-3">
+              <button 
+                onClick={() => { setAssignModal({ isOpen: false, assetId: null, assetName: '' }); setSelectedTech(''); }}
+                className="px-4 py-2 text-sm font-medium text-surface-300 hover:text-white bg-surface-800 hover:bg-surface-700 rounded-lg transition-colors"
+              >
+                Hủy bỏ
+              </button>
+              <button 
+                onClick={executeAssign}
+                disabled={!selectedTech || processingId === assignModal.assetId}
+                className={`px-4 py-2 text-sm font-medium text-white rounded-lg transition-colors flex items-center gap-2 ${
+                  selectedTech ? 'bg-purple-600 hover:bg-purple-500 shadow-lg shadow-purple-500/20' : 'bg-surface-700 text-surface-500 cursor-not-allowed'
+                }`}
+              >
+                {processingId === assignModal.assetId ? 'Đang xử lý...' : 'Giao việc'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- CONFIRM MODAL PHÊ DUYỆT --- */}
+      {confirmModal.isOpen && (
+        <div className="fixed inset-0 z-[55] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-[fadeIn_0.2s_ease-out]">
+          <div className="bg-surface-900 border border-surface-700 p-6 rounded-xl shadow-2xl max-w-sm w-full mx-4 animate-[slideUp_0.3s_ease-out]">
+            <h3 className="text-lg font-bold text-white mb-2">
+              Xác nhận {confirmModal.status === 'approved' ? 'Phê duyệt' : 'Từ chối'}
+            </h3>
+            <p className="text-sm text-surface-300 mb-6">
+              Bạn có chắc chắn muốn <strong className={confirmModal.status === 'approved' ? 'text-emerald-400' : 'text-red-400'}>
+                {confirmModal.status === 'approved' ? 'DUYỆT' : 'TỪ CHỐI'}
+              </strong> tài sản/báo cáo: <br/><span className="text-white mt-1 inline-block">"{confirmModal.assetName}"</span> không?
+            </p>
+            <div className="flex justify-end gap-3">
+              <button 
+                onClick={() => setConfirmModal({ isOpen: false, assetId: null, status: null, assetName: '' })}
+                className="px-4 py-2 text-sm font-medium text-surface-300 hover:text-white bg-surface-800 hover:bg-surface-700 rounded-lg transition-colors"
+              >
+                Hủy bỏ
+              </button>
+              <button 
+                onClick={executeApproval}
+                className={`px-4 py-2 text-sm font-medium text-white rounded-lg transition-colors ${
+                  confirmModal.status === 'approved' ? 'bg-emerald-600 hover:bg-emerald-500' : 'bg-red-600 hover:bg-red-500'
+                }`}
+              >
+                Xác nhận
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="max-w-7xl mx-auto space-y-6 relative z-10">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 mb-2 border-b border-surface-800 pb-4">
           <div>
             <h1 className="text-2xl font-bold text-white flex items-center gap-2">
@@ -130,7 +295,7 @@ export default function DashboardPage() {
                   currentTab === 'construction' ? 'bg-primary-600 text-white shadow-md' : 'text-surface-400 hover:text-surface-200'
                 }`}
               >
-                <span className="relative flex h-2 w-2">
+                <span className="relative flex h-2 w-2 print:hidden">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                 </span>
@@ -139,7 +304,10 @@ export default function DashboardPage() {
             </div>
 
             {isLeader && (
-              <button className="bg-surface-800 hover:bg-surface-700 border border-surface-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-2">
+              <button 
+                onClick={handleExportPDF} 
+                className="bg-surface-800 hover:bg-surface-700 border border-surface-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-2 print:hidden"
+              >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
                 Xuất PDF
               </button>
@@ -154,7 +322,7 @@ export default function DashboardPage() {
             priority={priority} 
             pendingAssets={pendingAssets} 
             isLeader={isLeader} 
-            handleApproval={handleApproval} 
+            handleApproval={handleOpenConfirm} 
             processingId={processingId}
             handleAssignTask={handleAssignTask}
           />
@@ -168,7 +336,6 @@ export default function DashboardPage() {
 }
 
 function OverviewDashboard({ summary, incidents = [], priority = [], pendingAssets = [], isLeader, handleApproval, processingId, handleAssignTask }) {
-  // Đảm bảo là mảng
   const safeIncidents = Array.isArray(incidents) ? incidents : [];
   const safePriority = Array.isArray(priority) ? priority : [];
   const safePending = Array.isArray(pendingAssets) ? pendingAssets : [];
@@ -227,14 +394,14 @@ function OverviewDashboard({ summary, incidents = [], priority = [], pendingAsse
                 {isLeader && (
                   <div className="flex gap-2 mt-1 pt-3 border-t border-surface-700/50">
                     <button 
-                      onClick={() => handleApproval(asset.id || asset._id, 'approved')}
+                      onClick={() => handleApproval(asset.id || asset._id, 'approved', asset.name)}
                       disabled={processingId === (asset.id || asset._id)}
                       className="flex-1 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-semibold py-1.5 rounded text-xs transition flex justify-center items-center gap-1"
                     >
                       {processingId === (asset.id || asset._id) ? 'Đang xử lý...' : <><svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg> Duyệt</>}
                     </button>
                     <button 
-                      onClick={() => handleApproval(asset.id || asset._id, 'rejected')}
+                      onClick={() => handleApproval(asset.id || asset._id, 'rejected', asset.name)}
                       disabled={processingId === (asset.id || asset._id)}
                       className="flex-1 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 font-semibold py-1.5 rounded text-xs transition flex justify-center items-center gap-1"
                     >
@@ -323,7 +490,10 @@ function OverviewDashboard({ summary, incidents = [], priority = [], pendingAsse
                     </div>
                   </div>
                   {isLeader ? (
-                    <button onClick={() => handleAssignTask(asset.id || asset._id)} className="bg-purple-600 hover:bg-purple-500 text-white px-3 py-1.5 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-sm">
+                    <button 
+                      onClick={() => handleAssignTask(asset.id || asset._id, asset.name)} 
+                      className="bg-purple-600 hover:bg-purple-500 text-white px-3 py-1.5 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-sm"
+                    >
                       <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
                       Giao việc
                     </button>
@@ -345,7 +515,6 @@ function OverviewDashboard({ summary, incidents = [], priority = [], pendingAsse
 }
 
 function ConstructionDashboard({ constructions = [] }) {
-  // Ép kiểu an toàn (Safe fallback)
   const safeConstructions = Array.isArray(constructions) ? constructions : [];
   
   const total = safeConstructions.length;

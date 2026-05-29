@@ -1,5 +1,6 @@
 const MaintenanceRecord = require('../models/MaintenanceRecord');
 const Asset = require('../models/Asset');
+const User = require('../models/User'); // Bổ sung để lấy danh sách KTV
 const audit = require('./audit.service');
 
 const getByAsset = async (assetId, query = {}) => {
@@ -19,24 +20,21 @@ const getByAsset = async (assetId, query = {}) => {
   return { records, total, page: parseInt(page), limit: parseInt(limit) };
 };
 
-// --- THÊM MỚI: Lấy danh sách tất cả các task thi công cho Dashboard Lãnh đạo ---
 const getAllTasks = async (query = {}) => {
   // Bỏ qua các task đã bị hủy
   const records = await MaintenanceRecord.find({ status: { $ne: 'cancelled' } })
     .populate({
       path: 'assetId',
       select: 'name assetCode managedAreaId',
-      populate: { path: 'managedAreaId', select: 'name code' } // Lấy tên khu vực
+      populate: { path: 'managedAreaId', select: 'name code' } 
     })
     .populate('performedBy', 'fullName role')
     .sort({ recordedAt: -1 })
-    .limit(50); // Lấy 50 dự án mới nhất
+    .limit(50); 
 
-  // Format lại dữ liệu cho phù hợp với table của Dashboard Thi công
   return records.map(record => {
     const obj = record.toObject();
     
-    // Tính toán giả lập phần trăm tiến độ dựa vào trạng thái
     let progress = 0;
     if (obj.status === 'in_progress') progress = 50;
     if (obj.status === 'resolved') progress = 100;
@@ -119,4 +117,57 @@ const update = async (id, data, user) => {
   return record;
 };
 
-module.exports = { getByAsset, getAllTasks, create, update };
+// ============================================================================
+// HÀM MỚI: XỬ LÝ GIAO VIỆC CHO KỸ THUẬT VIÊN
+// ============================================================================
+
+// 1. Lấy danh sách nhân viên kỹ thuật
+const getTechnicians = async () => {
+  return await User.find({ role: 'technician', isActive: true }).select('_id fullName username');
+};
+
+// 2. Giao việc dựa trên ID của tài sản (Tìm task đang mở và gán KTV vào)
+const assignTaskByAssetId = async (assetId, technicianId, user) => {
+  const record = await MaintenanceRecord.findOne({
+    assetId: assetId,
+    status: 'open' // Tìm sự cố đang treo chưa ai xử lý
+  });
+
+  if (!record) {
+    throw Object.assign(new Error('Tài sản này không có sự cố nào đang chờ xử lý.'), { statusCode: 404 });
+  }
+
+  const tech = await User.findById(technicianId);
+  if (!tech || tech.role !== 'technician') {
+    throw Object.assign(new Error('Kỹ thuật viên không hợp lệ'), { statusCode: 400 });
+  }
+
+  const before = record.toObject();
+
+  // Cập nhật người xử lý và trạng thái thành "Đang thi công"
+  record.performedBy = technicianId;
+  record.status = 'in_progress';
+  record.updatedBy = user._id;
+  await record.save();
+
+  audit.log({
+    action: 'assign',
+    entityType: 'MaintenanceRecord',
+    entityId: record._id,
+    performedBy: user._id,
+    before: before,
+    after: record.toObject(),
+    details: `Giao việc xử lý sự cố cho KTV: ${tech.fullName}`,
+  });
+
+  return record;
+};
+
+module.exports = { 
+  getByAsset, 
+  getAllTasks, 
+  create, 
+  update, 
+  getTechnicians, 
+  assignTaskByAssetId 
+};

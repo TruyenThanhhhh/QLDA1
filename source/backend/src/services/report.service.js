@@ -2,6 +2,9 @@ const Asset = require('../models/Asset');
 const MaintenanceRecord = require('../models/MaintenanceRecord');
 
 const getSummary = async () => {
+  // LỌC CỐT LÕI: Chỉ lấy tài sản ĐÃ DUYỆT (bỏ qua pending và rejected)
+  const baseFilter = { isDeleted: { $ne: true }, approvalStatus: 'approved' };
+
   const [
     totalAssets,
     byType,
@@ -10,14 +13,14 @@ const getSummary = async () => {
     recentMaintenance,
     priorityAssets,
   ] = await Promise.all([
-    Asset.countDocuments({ isDeleted: { $ne: true } }),
+    Asset.countDocuments(baseFilter),
     Asset.aggregate([
-      { $match: { isDeleted: { $ne: true } } },
+      { $match: baseFilter },
       { $group: { _id: '$assetType', count: { $sum: 1 } } },
       { $sort: { count: -1 } },
     ]),
     Asset.aggregate([
-      { $match: { isDeleted: { $ne: true } } },
+      { $match: baseFilter },
       { $group: { _id: '$status', count: { $sum: 1 } } },
     ]),
     MaintenanceRecord.countDocuments({
@@ -29,7 +32,7 @@ const getSummary = async () => {
       .populate('reportedBy', 'fullName')
       .sort({ recordedAt: -1 })
       .limit(10),
-    Asset.find({ status: 'damaged', isDeleted: { $ne: true } })
+    Asset.find({ status: 'damaged', ...baseFilter })
       .populate('managedAreaId', 'code name')
       .sort({ updatedAt: 1 })
       .limit(20),
@@ -50,6 +53,8 @@ const getIncidentsByArea = async () => {
       },
     },
     { $unwind: '$asset' },
+    // Chỉ đếm sự cố của những tài sản đã được duyệt
+    { $match: { 'asset.approvalStatus': 'approved' } },
     {
       $lookup: {
         from: 'areas',
@@ -78,6 +83,7 @@ const getPriorityList = async () => {
   const assets = await Asset.find({
     status: 'damaged',
     isDeleted: { $ne: true },
+    approvalStatus: 'approved' // Chỉ lấy tài sản đã duyệt
   })
     .populate('managedAreaId', 'code name')
     .sort({ updatedAt: 1 })
