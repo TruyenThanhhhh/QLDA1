@@ -2,6 +2,7 @@ import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useSocket } from '../../contexts/SocketContext'; 
 import { useState, useEffect } from 'react';
+import ChatWidget from './ChatWidget';
 
 const roleLabels = {
   admin: 'Quản trị viên',
@@ -155,6 +156,7 @@ export default function MainLayout() {
       {/* Main content */}
       <main className="flex-1 overflow-hidden relative">
         <Outlet />
+        <ChatWidget />
         
         {/* Toast Notifications */}
         <div className="absolute top-4 right-4 z-[9999] flex flex-col gap-2 pointer-events-none">

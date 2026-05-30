@@ -22,7 +22,11 @@ module.exports = {
   },
   getIo: () => {
     if (!io) {
-      throw new Error('Socket.io not initialized!');
+      return {
+        emit: (event, data) => {
+          console.warn(`Socket.io not initialized. Event '${event}' not broadcast.`);
+        }
+      };
     }
     return io;
   },

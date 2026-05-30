@@ -412,6 +412,7 @@ function LeaderDashboard({ user }) {
   const [incidents, setIncidents] = useState([]);
   const [priority, setPriority] = useState([]);
   const [pendingAssets, setPendingAssets] = useState([]);
+  const [predictiveList, setPredictiveList] = useState([]);
   const [constructions, setConstructions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isExportingExcel, setIsExportingExcel] = useState(false);
@@ -428,12 +429,13 @@ function LeaderDashboard({ user }) {
 
   const fetchDashboardData = async () => {
     try {
-      const [sumRes, incRes, priRes, pendRes, constRes] = await Promise.all([
+      const [sumRes, incRes, priRes, pendRes, constRes, predRes] = await Promise.all([
         client.get('/reports/summary'),
         client.get('/reports/incidents'),
         client.get('/reports/priority'),
         client.get('/assets', { params: { approvalStatus: 'pending', limit: 10 } }),
-        client.get('/tasks')
+        client.get('/tasks'),
+        client.get('/reports/predictive-maintenance')
       ]);
       
       const sumData = sumRes.data?.data || sumRes.data || null;
@@ -445,12 +447,15 @@ function LeaderDashboard({ user }) {
       const pendData = Array.isArray(rawPend) ? rawPend : [];
       const rawConst = constRes.data?.data || constRes.data;
       const constData = Array.isArray(rawConst) ? rawConst : [];
+      const rawPred = predRes.data?.data || predRes.data;
+      const predData = Array.isArray(rawPred) ? rawPred : [];
 
       setSummary(sumData);
       setIncidents(incData);
       setPriority(priData);
       setPendingAssets(pendData);
       setConstructions(constData);
+      setPredictiveList(predData);
     } catch (err) {
       console.error('Lỗi khi tải dữ liệu Dashboard:', err);
     } finally {
@@ -744,6 +749,7 @@ function LeaderDashboard({ user }) {
             incidents={incidents} 
             priority={priority} 
             pendingAssets={pendingAssets} 
+            predictiveList={predictiveList}
             isLeader={isLeader} 
             handleApproval={handleOpenConfirm} 
             processingId={processingId}
@@ -759,7 +765,7 @@ function LeaderDashboard({ user }) {
 }
 
 // Các Component con của Lãnh Đạo
-function OverviewDashboard({ summary, incidents = [], priority = [], pendingAssets = [], isLeader, handleApproval, processingId, handleAssignTask }) {
+function OverviewDashboard({ summary, incidents = [], priority = [], pendingAssets = [], predictiveList = [], isLeader, handleApproval, processingId, handleAssignTask }) {
   const safeIncidents = Array.isArray(incidents) ? incidents : [];
   const safePriority = Array.isArray(priority) ? priority : [];
   const safePending = Array.isArray(pendingAssets) ? pendingAssets : [];
@@ -940,6 +946,65 @@ function OverviewDashboard({ summary, incidents = [], priority = [], pendingAsse
             </div>
           )}
         </div>
+      </div>
+
+      {/* Phân hệ Dự báo bảo trì (Predictive Maintenance) */}
+      <div className="bg-surface-900 border border-surface-800 rounded-xl p-5 shadow-lg flex flex-col">
+        <h3 className="text-base font-semibold text-white mb-4 flex items-center gap-2">
+          🔮 Dự Báo Nhu Cầu Bảo Trì Hạ Tầng (AI & Wear Analytics)
+          <span className="ml-auto text-xs bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded-full font-bold">
+            {predictiveList.filter(a => a.needsMaintenance).length} tài sản nguy cơ cao
+          </span>
+        </h3>
+        {predictiveList.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {predictiveList.map((asset) => {
+              const score = asset.riskScore || 0;
+              let barColor = 'bg-emerald-500';
+              let textColor = 'text-emerald-400';
+              let badgeLabel = 'An toàn';
+              let badgeStyle = 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
+
+              if (score >= 75) {
+                barColor = 'bg-red-500';
+                textColor = 'text-red-400';
+                badgeLabel = 'Nguy cơ rất cao';
+                badgeStyle = 'bg-red-500/10 text-red-400 border-red-500/20';
+              } else if (score >= 55) {
+                barColor = 'bg-amber-500';
+                textColor = 'text-amber-400';
+                badgeLabel = 'Cần theo dõi';
+                badgeStyle = 'bg-amber-500/10 text-amber-400 border-amber-500/20';
+              }
+
+              return (
+                <div key={asset.id || asset._id} className="bg-surface-800/40 p-4 rounded-xl border border-surface-700/50 flex flex-col justify-between gap-3 hover:border-surface-600 transition-colors">
+                  <div>
+                    <div className="flex justify-between items-start mb-2">
+                      <span className={`text-[10px] font-bold px-2 py-0.5 border rounded uppercase tracking-wider ${badgeStyle}`}>
+                        {badgeLabel}
+                      </span>
+                      <span className="text-xs text-surface-400 font-medium">Độ rủi ro: <strong className={textColor}>{score}%</strong></span>
+                    </div>
+                    <h4 className="text-surface-100 text-sm font-semibold truncate" title={asset.name}>{asset.name}</h4>
+                    <p className="text-[11px] text-surface-400 mt-1">Mã: {asset.assetCode} • {TYPE_LABELS[asset.assetType] || asset.assetType}</p>
+                    <p className="text-[11px] text-surface-500 truncate mt-0.5">Vị trí: {asset.managedAreaId?.name || 'Chưa phân khu'}</p>
+                  </div>
+                  
+                  <div className="space-y-1">
+                    <div className="w-full bg-surface-700 rounded-full h-2 overflow-hidden">
+                      <div className={`h-full rounded-full transition-all duration-500 ${barColor}`} style={{ width: `${score}%` }}></div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="text-center py-8 text-surface-500 text-sm">
+            Không có dữ liệu dự báo bảo trì hạ tầng.
+          </div>
+        )}
       </div>
     </div>
   );

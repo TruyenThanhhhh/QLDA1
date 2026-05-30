@@ -14,27 +14,34 @@ const uploadPhotos = async (req, res, next) => {
       return error(res, 'Không có ảnh nào được upload', 400);
     }
 
-    const photos = req.files.map(file => {
+    const photos = [];
+    for (const file of req.files) {
       const isCloudinary = file.path && file.path.startsWith('http');
       
       let aiTags = [];
       let aiSeverity = 'normal';
+      let aiDescription = '';
 
-      if (isCloudinary) {
-        aiTags = aiService.extractTagsFromCloudinaryResponse(file);
-        aiSeverity = aiService.analyzeTagsForSeverity(aiTags);
+      try {
+        const aiResult = await aiService.analyzeImage(file);
+        aiTags = aiResult.aiTags;
+        aiSeverity = aiResult.aiSeverity;
+        aiDescription = aiResult.description;
+      } catch (err) {
+        console.error('Lỗi khi phân tích ảnh qua Gemini:', err);
       }
 
-      return {
+      photos.push({
         filename: file.filename || file.originalname,
         originalName: file.originalname,
         path: isCloudinary ? file.path : `/uploads/photos/${file.filename}`,
         size: file.size || 0,
         aiTags: aiTags,
         aiSeverity: aiSeverity,
+        description: aiDescription,
         uploadedAt: new Date(),
-      };
-    });
+      });
+    }
 
     asset.photos.push(...photos);
     await asset.save();

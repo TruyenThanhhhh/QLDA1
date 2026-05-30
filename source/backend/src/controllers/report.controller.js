@@ -69,6 +69,25 @@ const exportPDF = async (req, res, next) => {
   }
 };
 
+const getCustomRoute = async (req, res, next) => {
+  try {
+    const { start, end } = req.query;
+    const data = await routingService.getCustomRoute(start, end);
+    success(res, data);
+  } catch (err) {
+    next(err);
+  }
+};
+
+const getPredictiveMaintenance = async (req, res, next) => {
+  try {
+    const data = await reportService.calculatePredictiveMaintenance();
+    success(res, data);
+  } catch (err) {
+    next(err);
+  }
+};
+
 // BẮT BUỘC: Phải export đầy đủ các hàm thì route mới nhận diện được
 module.exports = { 
   getSummary, 
@@ -76,5 +95,7 @@ module.exports = {
   getPriorityList, 
   getOptimalRoute,
   exportExcel,
-  exportPDF
+  exportPDF,
+  getCustomRoute,
+  getPredictiveMaintenance
 };

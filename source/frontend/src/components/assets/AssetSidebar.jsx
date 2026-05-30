@@ -310,8 +310,14 @@ export default function AssetSidebar({
           >
             <option value="">Tất cả loại</option>
             <option value="road">🛣️ Đường</option>
+            <option value="sign">🪧 Biển báo</option>
             <option value="traffic_light">🚦 Đèn TH</option>
             <option value="manhole">🕳️ Nắp cống</option>
+            <option value="lamp_post">💡 Cột đèn</option>
+            <option value="sidewalk">🚶 Vỉa hè</option>
+            <option value="tree">🌳 Cây xanh</option>
+            <option value="bus_station">🚌 Trạm xe buýt</option>
+            <option value="parking">🅿️ Bãi đỗ xe</option>
           </select>
           <select
             value={filters.status || ''}

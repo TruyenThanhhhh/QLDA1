@@ -216,10 +216,58 @@ const exportPDFReport = async () => {
   });
 };
 
+const calculatePredictiveMaintenance = async () => {
+  const assets = await Asset.find({ isDeleted: false, approvalStatus: 'approved' });
+  const results = [];
+  
+  for (const asset of assets) {
+    // 1. Base Score based on status
+    let baseScore = 10;
+    if (asset.status === 'fair') baseScore = 45;
+    if (asset.status === 'damaged') baseScore = 85;
+
+    // 2. Age Factor (max 20 pts)
+    const ageInYears = (new Date().getFullYear()) - (asset.createdAt ? new Date(asset.createdAt).getFullYear() : new Date().getFullYear());
+    const ageScore = Math.min(ageInYears * 5, 20);
+
+    // 3. Asset Type wear rate (max 10 pts)
+    let typeScore = 2;
+    if (asset.assetType === 'road') typeScore = 10;
+    else if (asset.assetType === 'sidewalk') typeScore = 8;
+    else if (['traffic_light', 'lamp_post'].includes(asset.assetType)) typeScore = 5;
+
+    // 4. Past repair history count (max 30 pts)
+    const repairCount = await MaintenanceRecord.countDocuments({ assetId: asset._id });
+    const historyScore = Math.min(repairCount * 10, 30);
+
+    // 5. Public upvotes/sentiments (max 15 pts)
+    const upvotesCount = asset.upvotes ? asset.upvotes.length : 0;
+    const sentimentScore = Math.min(upvotesCount * 3, 15);
+
+    // Total Risk Score (clamped 0-100)
+    let riskScore = baseScore + ageScore + typeScore + historyScore + sentimentScore;
+    riskScore = Math.max(0, Math.min(Math.round(riskScore), 100));
+
+    const needsMaintenance = riskScore >= 60;
+
+    // Save to DB
+    asset.riskScore = riskScore;
+    asset.needsMaintenance = needsMaintenance;
+    await asset.save();
+
+    results.push(asset);
+  }
+
+  // Sort descending and return top 15
+  results.sort((a, b) => b.riskScore - a.riskScore);
+  return results.slice(0, 15);
+};
+
 module.exports = {
   getSummary,
   getIncidentsByArea,
   getPriorityList,
   exportExcelReport,
-  exportPDFReport
+  exportPDFReport,
+  calculatePredictiveMaintenance
 };

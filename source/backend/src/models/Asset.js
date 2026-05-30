@@ -16,7 +16,7 @@ const assetSchema = new mongoose.Schema({
     type: String,
     required: true,
     // ĐÃ BỔ SUNG: 'tree' (Cây xanh)
-    enum: ['road', 'sign', 'traffic_light', 'manhole', 'lamp_post', 'sidewalk', 'tree'],
+    enum: ['road', 'sign', 'traffic_light', 'manhole', 'lamp_post', 'sidewalk', 'tree', 'bus_station', 'parking'],
   },
   geometryType: {
     type: String,
@@ -100,10 +100,30 @@ const assetSchema = new mongoose.Schema({
     enum: ['pending', 'approved', 'rejected'],
     default: 'pending',
   },
+  needsMaintenance: {
+    type: Boolean,
+    default: false,
+  },
+  riskScore: {
+    type: Number,
+    min: 0,
+    max: 100,
+    default: 0,
+  },
   isDeleted: {
     type: Boolean,
     default: false,
   },
+  upvotes: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+  }],
+  comments: [{
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    fullName: { type: String, required: true },
+    text: { type: String, required: true },
+    createdAt: { type: Date, default: Date.now },
+  }],
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',

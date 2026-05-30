@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { MapContainer, TileLayer, useMap, Polyline } from 'react-leaflet';
 import L from 'leaflet';
 import AssetLayer from './AssetLayer';
+import HeatmapLayer from './HeatmapLayer';
 import AreaLayer from './AreaLayer';
 import MapPicker from './MapPicker';
 import { convertGeometry } from '../../utils/geoconvert';
@@ -80,6 +81,7 @@ function MapEvents({
   pickerPosition,
   showAreaLayer,
   routePolyline,
+  showHeatmap,
 }) {
   // OSRM trả về [lon, lat], Polyline cần [lat, lon]
   const polylinePositions = routePolyline?.coordinates 
@@ -92,7 +94,11 @@ function MapEvents({
       <FitBounds assets={assets} areas={areas} showAreaLayer={showAreaLayer} />
       <FocusAsset asset={focusAsset} />
       {showAreaLayer && <AreaLayer areas={areas} />}
-      <AssetLayer assets={assets} selectedAssetId={selectedAssetId} onAssetClick={onAssetClick} />
+      {showHeatmap ? (
+        <HeatmapLayer assets={assets} />
+      ) : (
+        <AssetLayer assets={assets} selectedAssetId={selectedAssetId} onAssetClick={onAssetClick} />
+      )}
       {(isPickingLocation || pickerPosition) && (
         <MapPicker
           onLocationPicked={onLocationPicked}
@@ -123,6 +129,7 @@ export default function Map({
   pickerPosition = null,
   showAreaLayer = false,
   routePolyline = null, // Prop dự phòng
+  showHeatmap = false,
 }) {
   const [eventRoute, setEventRoute] = useState(null);
 
@@ -166,6 +173,7 @@ export default function Map({
           pickerPosition={pickerPosition}
           showAreaLayer={showAreaLayer}
           routePolyline={activeRoute}
+          showHeatmap={showHeatmap}
         />
       </MapContainer>
     </div>

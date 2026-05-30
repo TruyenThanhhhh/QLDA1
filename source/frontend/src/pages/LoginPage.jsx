@@ -105,28 +105,7 @@ export default function LoginPage() {
           </form>
 
           <div className="mt-6 pt-6 border-t border-surface-700/50">
-            <p className="text-surface-500 text-xs text-center mb-3">Tài khoản demo</p>
-            {/* Chuyển grid-cols-3 thành grid-cols-2 để hiển thị đẹp 4 tài khoản */}
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              {[
-                { user: 'admin', pass: 'admin123', role: 'Quản trị' },
-                { user: 'lanhdao', pass: 'leader123', role: 'Lãnh đạo' }, // Đã thêm role lãnh đạo
-                { user: 'kythuat', pass: 'kythuat123', role: 'Kỹ thuật' },
-                { user: 'nhandan', pass: 'user123', role: 'Công dân' },
-              ].map((demo) => (
-                <button
-                  key={demo.user}
-                  type="button"
-                  onClick={() => { setUsername(demo.user); setPassword(demo.pass); }}
-                  className="p-2 bg-surface-700/40 rounded-lg hover:bg-surface-600/40 transition-colors text-center"
-                >
-                  <div className="text-surface-300 font-medium">{demo.role}</div>
-                  <div className="text-surface-500 mt-0.5">{demo.user}</div>
-                </button>
-              ))}
-            </div>
-
-            <p className="mt-8 text-center text-surface-400 text-sm">
+            <p className="text-center text-surface-400 text-sm">
               Chưa có tài khoản?{' '}
               <Link to="/register" className="text-primary-400 hover:text-primary-300 font-medium transition-colors">
                 Đăng ký ngay

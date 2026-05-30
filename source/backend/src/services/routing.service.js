@@ -1,5 +1,6 @@
 const axios = require('axios');
 const MaintenanceRecord = require('../models/MaintenanceRecord');
+const Asset = require('../models/Asset');
 
 /**
  * Thuật toán Nearest Neighbor cơ bản để giải bài toán TSP (Người chào hàng)
@@ -117,6 +118,63 @@ const optimizeRoute = async (userLocation = null) => {
   }
 };
 
+const getCustomRoute = async (start, end) => {
+  if (!start || !end) {
+    throw Object.assign(new Error('Thiếu điểm bắt đầu hoặc kết thúc'), { statusCode: 400 });
+  }
+
+  const osrmRouteUrl = `http://router.project-osrm.org/route/v1/driving/${start};${end}?geometries=geojson&overview=full`;
+
+  try {
+    const response = await axios.get(osrmRouteUrl);
+    if (!response.data.routes || response.data.routes.length === 0) {
+      throw new Error('Không thể tìm thấy lộ trình');
+    }
+
+    const route = response.data.routes[0];
+    const polyline = route.geometry;
+
+    const damagedAssets = await Asset.find({ status: 'damaged', isDeleted: false });
+    const warnings = [];
+
+    if (polyline && polyline.coordinates) {
+      damagedAssets.forEach(asset => {
+        if (asset.geometry && asset.geometry.type === 'Point') {
+          const [assetLon, assetLat] = asset.geometry.coordinates;
+
+          let minDist = Infinity;
+          polyline.coordinates.forEach(([routeLon, routeLat]) => {
+            const dist = Math.sqrt(Math.pow(assetLon - routeLon, 2) + Math.pow(assetLat - routeLat, 2));
+            if (dist < minDist) minDist = dist;
+          });
+
+          if (minDist < 0.002) {
+            warnings.push({
+              id: asset.id,
+              name: asset.name,
+              assetCode: asset.assetCode,
+              assetType: asset.assetType,
+              coordinates: asset.geometry.coordinates,
+              distanceApproxMeters: Math.round(minDist * 111000)
+            });
+          }
+        }
+      });
+    }
+
+    return {
+      polyline: polyline,
+      distance: route.distance,
+      duration: route.duration,
+      warnings: warnings
+    };
+  } catch (err) {
+    console.error('Lỗi khi gọi OSRM Route:', err.message);
+    throw err;
+  }
+};
+
 module.exports = {
-  optimizeRoute
+  optimizeRoute,
+  getCustomRoute
 };

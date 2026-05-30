@@ -8,6 +8,9 @@ const ASSET_TYPES = [
   { value: 'lamp_post', label: 'Cột đèn' },
   { value: 'road', label: 'Đường' },
   { value: 'sidewalk', label: 'Vỉa hè' },
+  { value: 'tree', label: 'Cây xanh' },
+  { value: 'bus_station', label: 'Trạm xe buýt' },
+  { value: 'parking', label: 'Bãi đỗ xe' },
 ];
 
 const STATUS_OPTIONS = [
