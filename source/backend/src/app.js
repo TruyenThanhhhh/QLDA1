@@ -11,6 +11,7 @@ const areaRoutes = require('./routes/area.routes');
 const maintenanceRoutes = require('./routes/maintenance.routes');
 const reportRoutes = require('./routes/report.routes');
 const importRoutes = require('./routes/import.routes');
+const userRoutes = require('./routes/user.routes'); // ĐÃ THÊM: Import user.routes
 
 const app = express();
 
@@ -53,7 +54,7 @@ app.use('/api/areas', areaRoutes);
 app.use('/api', maintenanceRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/import', importRoutes);
-
+app.use('/api/users', userRoutes); // ĐÃ THÊM: Đăng ký route /api/users
 
 // ==========================================
 // HEALTH CHECK & ERROR HANDLING
