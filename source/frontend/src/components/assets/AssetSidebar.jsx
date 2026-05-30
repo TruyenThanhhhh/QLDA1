@@ -27,23 +27,27 @@ export default function AssetSidebar({
   selectedAssetId,
   onRouteFound 
 }) {
-  // Lấy thông tin user hiện tại từ context
   const { hasRole, user } = useAuth(); 
   const [osmResults, setOsmResults] = useState([]);
   const [isSearchingOSM, setIsSearchingOSM] = useState(false);
   
-  // State cho chức năng tìm đường nội bộ trong Sidebar
   const [routingMode, setRoutingMode] = useState(false);
   const [startQuery, setStartQuery] = useState('');
   const [startCoords, setStartCoords] = useState(null);
   const [routeError, setRouteError] = useState('');
   const [isRouting, setIsRouting] = useState(false);
   
-  // State mới cho Gợi ý địa điểm (Autocomplete) tại ô Điểm đi
   const [routeSuggestions, setRouteSuggestions] = useState([]);
   const [showRouteSuggestions, setShowRouteSuggestions] = useState(false);
+  
+  // State thay thế cho alert()
+  const [devToast, setDevToast] = useState('');
 
-  // Debounce tìm kiếm mờ (Fuzzy Search) cho thanh Search chính
+  const showDevToast = (message) => {
+    setDevToast(message);
+    setTimeout(() => setDevToast(''), 3000);
+  };
+
   useEffect(() => {
     const search = filters.search?.trim();
     if (!search || search.length < 2) {
@@ -71,13 +75,12 @@ export default function AssetSidebar({
               status: 'none',
               geometry: {
                 type: 'Point',
-                coordinates: [f.geometry.coordinates[0], f.geometry.coordinates[1]] // [lng, lat]
+                coordinates: [f.geometry.coordinates[0], f.geometry.coordinates[1]] 
               },
               fullAddress: address
             };
           }).filter(item => item.name !== 'Địa điểm');
 
-          // Lọc trùng lặp
           const uniqueOsm = [];
           const seenNames = new Set();
           formattedOsm.forEach(item => {
@@ -99,11 +102,9 @@ export default function AssetSidebar({
     return () => clearTimeout(timer);
   }, [filters.search]);
 
-  // Debounce tìm kiếm mờ (Fuzzy Search) cho ô nhập ĐIỂM ĐI
   useEffect(() => {
     const query = startQuery?.trim();
     
-    // Không tìm nếu rỗng, quá ngắn, hoặc đang chọn vị trí hiện tại/đã có tọa độ
     if (!query || query.length < 2 || query === 'Vị trí của bạn' || startCoords !== null) {
       setRouteSuggestions([]);
       setShowRouteSuggestions(false);
@@ -128,7 +129,6 @@ export default function AssetSidebar({
             };
           }).filter(item => item.name !== 'Địa điểm');
 
-          // Lọc trùng lặp
           const unique = [];
           const seen = new Set();
           formatted.forEach(item => {
@@ -151,7 +151,6 @@ export default function AssetSidebar({
     return () => clearTimeout(timer);
   }, [startQuery, startCoords]);
 
-  // Reset routing mode khi chọn tài sản khác
   useEffect(() => {
     setRoutingMode(false);
     setStartQuery('');
@@ -159,7 +158,7 @@ export default function AssetSidebar({
     setRouteError('');
     setShowRouteSuggestions(false);
     if (onRouteFound) onRouteFound(null);
-    window.dispatchEvent(new CustomEvent('map:clearRoute')); // Xóa đường trên Map
+    window.dispatchEvent(new CustomEvent('map:clearRoute')); 
   }, [selectedAssetId]);
 
   const handleSearchChange = (e) => {
@@ -200,7 +199,7 @@ export default function AssetSidebar({
       return;
     }
 
-    const endCoords = destinationAsset.geometry?.coordinates; // [lng, lat]
+    const endCoords = destinationAsset.geometry?.coordinates; 
     if (!endCoords) {
       setRouteError('Địa điểm này không có tọa độ hợp lệ.');
       return;
@@ -210,7 +209,6 @@ export default function AssetSidebar({
     try {
       let currentStartCoords = startCoords;
       
-      // Fallback: Nếu user nhập tay nhưng ko click vào suggestion nào, gọi API tìm điểm đi
       if (!currentStartCoords && startQuery !== 'Vị trí của bạn') {
         const res = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(startQuery)}&bbox=107.8,15.9,108.4,16.2&limit=1`);
         const data = await res.json();
@@ -228,11 +226,9 @@ export default function AssetSidebar({
       }
 
       if (currentStartCoords) {
-        // Lấy danh sách điểm đang hỏng để né (bán kính né mỗi điểm là 50m)
         const damagedPoints = assets.filter(a => a.status === 'damaged' && a.geometry?.type === 'Point');
         const nogos = damagedPoints.map(a => `${a.geometry.coordinates[0]},${a.geometry.coordinates[1]},50`).join('|');
 
-        // BRouter API hỗ trợ né các điểm bằng tham số nogos
         let brouterUrl = `https://brouter.de/brouter?lonlats=${currentStartCoords.lng},${currentStartCoords.lat}|${endCoords[0]},${endCoords[1]}&profile=car-fast&alternativeidx=0&format=geojson`;
         if (nogos) {
           brouterUrl += `&nogos=${nogos}`;
@@ -247,15 +243,13 @@ export default function AssetSidebar({
               if (onRouteFound) onRouteFound(geometry);
               window.dispatchEvent(new CustomEvent('map:routeFound', { detail: geometry }));
               setIsRouting(false);
-              return; // Vẽ xong bằng BRouter, thoát hàm.
+              return; 
             }
           }
         } catch (err) {
           console.warn("BRouter failed, falling back to OSRM", err);
         }
 
-        // --- FALLBACK ---
-        // Nếu BRouter lỗi hoặc không tìm được đường, fallback dùng OSRM (không né được sự cố)
         const osrmRes = await fetch(`https://router.project-osrm.org/route/v1/driving/${currentStartCoords.lng},${currentStartCoords.lat};${endCoords[0]},${endCoords[1]}?overview=full&geometries=geojson`);
         const routeData = await osrmRes.json();
         
@@ -274,11 +268,30 @@ export default function AssetSidebar({
   };
 
   return (
-    <div className="h-full flex flex-col bg-surface-900/95 backdrop-blur-xl border-r border-surface-700/50 font-sans">
+    <div className="h-full flex flex-col bg-surface-900/95 backdrop-blur-xl border-r border-surface-700/50 font-sans relative">
+      
+      {/* Toast thông báo thay cho Alert */}
+      {devToast && (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[100] px-4 py-2 bg-blue-600/90 backdrop-blur-md text-white rounded-lg text-sm shadow-xl border border-blue-400/50 animate-[slideUp_0.3s_ease-out] whitespace-nowrap">
+          🚧 {devToast}
+        </div>
+      )}
+
       {/* Header & Search */}
       <div className="p-4 border-b border-surface-700/50 flex-shrink-0">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-lg font-semibold text-white">Tra cứu Bản đồ</h2>
+          
+          {/* NÚT THÊM MỚI TÀI SẢN CHO LÃNH ĐẠO / ADMIN */}
+          {(user?.role === 'admin' || user?.role === 'leader') && (
+            <button 
+              onClick={onCreateNew} 
+              className="bg-primary-600 hover:bg-primary-500 text-white text-xs font-bold px-3 py-1.5 rounded-md flex items-center gap-1 shadow-lg shadow-primary-500/20 transition-all"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" /></svg>
+              THÊM MỚI
+            </button>
+          )}
         </div>
 
         <input
@@ -319,7 +332,7 @@ export default function AssetSidebar({
       </div>
 
       {/* Asset list */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto custom-scrollbar">
         {loading ? (
           <div className="flex items-center justify-center p-8">
             <div className="w-6 h-6 border-2 border-primary-500/30 border-t-primary-500 rounded-full animate-spin" />
@@ -331,11 +344,11 @@ export default function AssetSidebar({
         ) : (
           <div className="divide-y divide-surface-700/30">
             {combinedAssets.map((asset) => (
-              <div key={asset.id} className="flex flex-col">
+              <div key={asset.id || asset._id} className="flex flex-col">
                 <button
                   onClick={() => onAssetClick(asset)}
                   className={`w-full text-left px-4 py-3 hover:bg-surface-800/50 transition-colors duration-150 ${
-                    selectedAssetId === asset.id ? 'bg-primary-600/10 border-l-2 border-primary-500' : ''
+                    selectedAssetId === (asset.id || asset._id) ? 'bg-primary-600/10 border-l-2 border-primary-500' : ''
                   }`}
                 >
                   <div className="flex items-start gap-2.5">
@@ -358,7 +371,7 @@ export default function AssetSidebar({
                 </button>
 
                 {/* KHU VỰC HIỂN THỊ KHI ĐƯỢC CHỌN */}
-                {selectedAssetId === asset.id && (
+                {selectedAssetId === (asset.id || asset._id) && (
                   <div className="px-4 pb-4 pt-1 bg-primary-600/5">
                     
                     {/* View Mặc định: Hiển thị nút theo Role */}
@@ -376,19 +389,13 @@ export default function AssetSidebar({
                         {user?.role === 'leader' || user?.role === 'admin' ? (
                           <>
                             <button 
-                              onClick={() => alert('Chức năng GIAO VIỆC đang được phát triển')}
+                              onClick={() => showDevToast('Chức năng GIAO VIỆC đang được phát triển')}
                               className="flex-1 bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold py-2 px-1 rounded-md transition-colors flex items-center justify-center gap-1 shadow-sm min-w-[100px]"
                             >
                               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
                               GIAO VIỆC
                             </button>
-                            <button 
-                              onClick={() => alert('Chức năng PHÊ DUYỆT đang được phát triển')}
-                              className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold py-2 px-1 rounded-md transition-colors flex items-center justify-center gap-1 shadow-sm min-w-[100px]"
-                            >
-                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-                              PHÊ DUYỆT
-                            </button>
+                            {/* ĐÃ XÓA NÚT PHÊ DUYỆT THEO YÊU CẦU */}
                           </>
                         ) : (
                           <button 

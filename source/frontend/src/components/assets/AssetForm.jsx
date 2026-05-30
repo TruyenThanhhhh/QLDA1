@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import client from '../../api/client';
 
 const ASSET_TYPES = [
@@ -8,6 +8,7 @@ const ASSET_TYPES = [
   { value: 'lamp_post', label: '💡 Cột đèn' },
   { value: 'road', label: '🛣️ Đường' },
   { value: 'sidewalk', label: '🚶 Vỉa hè' },
+  { value: 'tree', label: '🌳 Cây xanh' },
 ];
 
 const STATUS_OPTIONS = [
@@ -16,16 +17,17 @@ const STATUS_OPTIONS = [
   { value: 'damaged', label: '🔴 Hư hỏng' },
 ];
 
-export default function AssetForm({ asset, onClose, onSaved, presetLocation }) {
+export default function AssetForm({ asset, onClose, onSaved, presetLocation, onStartPickingLocation, isPickingLocation }) {
   const isEdit = !!asset;
   const hasPresetLocation = !!presetLocation && !isEdit;
   const [step, setStep] = useState(1);
   const [form, setForm] = useState({
-    name: '',
-    assetType: 'sign',
-    description: '',
-    status: 'good',
-    material: '',
+    name: asset?.name || '',
+    assetType: asset?.assetType || 'sign',
+    description: asset?.description || '',
+    status: asset?.status || 'good',
+    material: asset?.material || '',
+    planningInfo: asset?.planningInfo || '',
   });
   const [location, setLocation] = useState(
     presetLocation || (asset?.geometry?.type === 'Point'
@@ -38,12 +40,21 @@ export default function AssetForm({ asset, onClose, onSaved, presetLocation }) {
   const [error, setError] = useState('');
   const fileInputRef = useRef(null);
 
+  // ĐỒNG BỘ TỌA ĐỘ VÀ TỰ ĐỘNG CHUYỂN BƯỚC KHI CHỌN TRÊN BẢN ĐỒ
+  useEffect(() => {
+    if (presetLocation) {
+      // Xử lý an toàn định dạng mảng hoặc object từ Map trả về
+      if (Array.isArray(presetLocation)) {
+        setLocation(presetLocation);
+      } else if (presetLocation.lat !== undefined) {
+        setLocation([presetLocation.lat, presetLocation.lng]);
+      }
+      setStep(3); // Tự động nhảy sang bước 3 sau khi ghim thành công
+    }
+  }, [presetLocation]);
+
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
-  };
-
-  const handleLocationSet = (latLng) => {
-    setLocation(latLng);
   };
 
   const handlePhotoChange = (e) => {
@@ -86,11 +97,14 @@ export default function AssetForm({ asset, onClose, onSaved, presetLocation }) {
 
     try {
       const data = {
+        // TỰ ĐỘNG SINH MÃ TÀI SẢN (TRÁNH LỖI BACKEND REQUIRE)
+        assetCode: isEdit ? asset.assetCode : `AST-${Date.now().toString().slice(-6)}`,
         name: form.name,
         assetType: form.assetType,
         description: form.description,
         status: form.status,
         material: form.material,
+        planningInfo: form.planningInfo,
         geometry: {
           type: 'Point',
           coordinates: [location[1], location[0]],
@@ -100,14 +114,18 @@ export default function AssetForm({ asset, onClose, onSaved, presetLocation }) {
       let assetId;
 
       if (isEdit) {
-        await client.patch(`/assets/${asset.id}`, data);
-        assetId = asset.id;
+        assetId = asset.id || asset._id;
+        await client.patch(`/assets/${assetId}`, data);
       } else {
         const res = await client.post('/assets', data);
-        assetId = res.data.id;
+        assetId = res.data?.data?.id || res.data?.data?._id || res.data?.id || res.data?._id;
       }
 
       if (!isEdit && photos.length > 0) {
+        if (!assetId) {
+          throw new Error('Lưu thành công nhưng không thể lấy ID tài sản để tải ảnh.');
+        }
+
         const formData = new FormData();
         photos.forEach(photo => {
           formData.append('photos', photo);
@@ -120,7 +138,7 @@ export default function AssetForm({ asset, onClose, onSaved, presetLocation }) {
 
       onSaved();
     } catch (err) {
-      setError(err.response?.data?.message || 'Lưu thất bại');
+      setError(err.response?.data?.message || err.message || 'Lưu thất bại');
     } finally {
       setSaving(false);
     }
@@ -130,7 +148,7 @@ export default function AssetForm({ asset, onClose, onSaved, presetLocation }) {
   const canNextStep = (step === 1 && form.assetType) || (step === 2 && location);
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-full flex flex-col font-sans">
       <div className="p-4 border-b border-surface-700/50 flex-shrink-0">
         <div className="flex items-center justify-between">
           <h3 className="text-lg font-semibold text-white">
@@ -170,38 +188,52 @@ export default function AssetForm({ asset, onClose, onSaved, presetLocation }) {
         {isEdit ? (
           <>
             <div>
-              <label className="label-text">Tên tài sản *</label>
-              <input name="name" value={form.name} onChange={handleChange} className="input-field" required />
+              <label className="label-text text-surface-300 font-medium text-sm mb-1 block">Tên tài sản *</label>
+              <input name="name" value={form.name} onChange={handleChange} className="w-full bg-surface-950 border border-surface-700 rounded-lg px-3 py-2 text-sm text-white focus:border-primary-500 focus:outline-none transition-colors" required />
             </div>
             <div>
-              <label className="label-text">Loại tài sản</label>
-              <select name="assetType" value={form.assetType} onChange={handleChange} className="select-field">
+              <label className="label-text text-surface-300 font-medium text-sm mb-1 block">Loại tài sản</label>
+              <select name="assetType" value={form.assetType} onChange={handleChange} className="w-full bg-surface-950 border border-surface-700 rounded-lg px-3 py-2 text-sm text-white focus:border-primary-500 focus:outline-none transition-colors">
                 {ASSET_TYPES.map(t => (
                   <option key={t.value} value={t.value}>{t.label}</option>
                 ))}
               </select>
             </div>
             <div>
-              <label className="label-text">Mô tả</label>
+              <label className="label-text text-surface-300 font-medium text-sm mb-1 block">Mô tả</label>
               <textarea
                 name="description"
                 value={form.description}
                 onChange={handleChange}
-                className="input-field min-h-[80px] resize-none"
+                className="w-full bg-surface-950 border border-surface-700 rounded-lg px-3 py-2 text-sm text-white focus:border-primary-500 focus:outline-none transition-colors min-h-[80px] resize-none"
                 rows={3}
               />
             </div>
             <div>
-              <label className="label-text">Tình trạng</label>
-              <select name="status" value={form.status} onChange={handleChange} className="select-field">
+              <label className="label-text text-surface-300 font-medium text-sm mb-1 flex justify-between">
+                <span>Thông tin quy hoạch</span>
+                <span className="text-surface-500 italic font-normal text-[10px]">(Tùy chọn)</span>
+              </label>
+              <textarea
+                name="planningInfo"
+                value={form.planningInfo}
+                onChange={handleChange}
+                className="w-full bg-surface-950 border border-surface-700 rounded-lg px-3 py-2 text-sm text-white focus:border-primary-500 focus:outline-none transition-colors min-h-[60px] resize-none"
+                placeholder="VD: Nằm trong quy hoạch mở rộng 2026..."
+                rows={2}
+              />
+            </div>
+            <div>
+              <label className="label-text text-surface-300 font-medium text-sm mb-1 block">Tình trạng</label>
+              <select name="status" value={form.status} onChange={handleChange} className="w-full bg-surface-950 border border-surface-700 rounded-lg px-3 py-2 text-sm text-white focus:border-primary-500 focus:outline-none transition-colors">
                 {STATUS_OPTIONS.map(s => (
                   <option key={s.value} value={s.value}>{s.label}</option>
                 ))}
               </select>
             </div>
             <div>
-              <label className="label-text">Vật liệu</label>
-              <input name="material" value={form.material} onChange={handleChange} className="input-field" />
+              <label className="label-text text-surface-300 font-medium text-sm mb-1 block">Vật liệu</label>
+              <input name="material" value={form.material} onChange={handleChange} className="w-full bg-surface-950 border border-surface-700 rounded-lg px-3 py-2 text-sm text-white focus:border-primary-500 focus:outline-none transition-colors" />
             </div>
           </>
         ) : (
@@ -209,12 +241,12 @@ export default function AssetForm({ asset, onClose, onSaved, presetLocation }) {
             {step === 1 && (
               <>
                 <div>
-                  <label className="label-text">Loại đối tượng *</label>
+                  <label className="label-text text-surface-300 font-medium text-sm mb-1 block">Loại đối tượng *</label>
                   <select
                     name="assetType"
                     value={form.assetType}
                     onChange={handleChange}
-                    className="select-field"
+                    className="w-full bg-surface-950 border border-surface-700 rounded-lg px-3 py-2 text-sm text-white focus:border-primary-500 focus:outline-none transition-colors"
                   >
                     {ASSET_TYPES.map(t => (
                       <option key={t.value} value={t.value}>{t.label}</option>
@@ -233,7 +265,7 @@ export default function AssetForm({ asset, onClose, onSaved, presetLocation }) {
                   <div className="bg-surface-800/50 rounded-lg p-3">
                     <p className="text-sm text-surface-300 mb-1">Vị trí đã chọn:</p>
                     <p className="font-mono text-xs text-emerald-400">
-                      [{location[0].toFixed(6)}, {location[1].toFixed(6)}]
+                      [{Number(location[0]).toFixed(6)}, {Number(location[1]).toFixed(6)}]
                     </p>
                     <button
                       type="button"
@@ -244,8 +276,17 @@ export default function AssetForm({ asset, onClose, onSaved, presetLocation }) {
                     </button>
                   </div>
                 ) : (
-                  <div className="p-4 border-2 border-dashed border-surface-700 rounded-lg text-center text-surface-500 text-sm">
-                    Chưa chọn vị trí
+                  <div className="p-4 border-2 border-dashed border-surface-700 rounded-lg text-center text-surface-500 text-sm flex flex-col items-center gap-2">
+                    <p>Chưa chọn vị trí</p>
+                    <button
+                      type="button"
+                      onClick={onStartPickingLocation}
+                      className={`px-4 py-2 rounded text-sm transition-colors ${
+                        isPickingLocation ? 'bg-blue-600/20 text-blue-400 border border-blue-500' : 'bg-surface-700 hover:bg-surface-600 text-blue-400 shadow-sm'
+                      }`}
+                    >
+                      {isPickingLocation ? 'Đang chọn trên bản đồ...' : 'Ghim vị trí trên bản đồ'}
+                    </button>
                   </div>
                 )}
               </>
@@ -254,19 +295,19 @@ export default function AssetForm({ asset, onClose, onSaved, presetLocation }) {
             {step === 3 && (
               <>
                 <div>
-                  <label className="label-text">Tên đối tượng *</label>
+                  <label className="label-text text-surface-300 font-medium text-sm mb-1 block">Tên đối tượng *</label>
                   <input
                     name="name"
                     value={form.name}
                     onChange={handleChange}
-                    className="input-field"
+                    className="w-full bg-surface-950 border border-surface-700 rounded-lg px-3 py-2 text-sm text-white focus:border-primary-500 focus:outline-none transition-colors"
                     placeholder="VD: Biển báo cấm đỗ xe"
                     required
                   />
                 </div>
 
                 <div>
-                  <label className="label-text">Ảnh hiện trường * (tối đa 5)</label>
+                  <label className="label-text text-surface-300 font-medium text-sm mb-1 block">Ảnh hiện trường * (tối đa 5)</label>
                   <input
                     ref={fileInputRef}
                     type="file"
@@ -313,20 +354,35 @@ export default function AssetForm({ asset, onClose, onSaved, presetLocation }) {
                 </div>
 
                 <div>
-                  <label className="label-text">Mô tả ngắn</label>
+                  <label className="label-text text-surface-300 font-medium text-sm mb-1 block">Mô tả ngắn</label>
                   <textarea
                     name="description"
                     value={form.description}
                     onChange={handleChange}
-                    className="input-field min-h-[80px] resize-none"
+                    className="w-full bg-surface-950 border border-surface-700 rounded-lg px-3 py-2 text-sm text-white focus:border-primary-500 focus:outline-none transition-colors min-h-[80px] resize-none"
                     placeholder="Mô tả hiện trường..."
                     rows={3}
                   />
                 </div>
 
                 <div>
-                  <label className="label-text">Tình trạng</label>
-                  <select name="status" value={form.status} onChange={handleChange} className="select-field">
+                  <label className="label-text text-surface-300 font-medium text-sm mb-1 flex justify-between">
+                    <span>Thông tin quy hoạch</span>
+                    <span className="text-surface-500 italic font-normal text-[10px]">(Tùy chọn)</span>
+                  </label>
+                  <textarea
+                    name="planningInfo"
+                    value={form.planningInfo}
+                    onChange={handleChange}
+                    className="w-full bg-surface-950 border border-surface-700 rounded-lg px-3 py-2 text-sm text-white focus:border-primary-500 focus:outline-none transition-colors min-h-[60px] resize-none"
+                    placeholder="VD: Nằm trong quy hoạch mở rộng 2026..."
+                    rows={2}
+                  />
+                </div>
+
+                <div>
+                  <label className="label-text text-surface-300 font-medium text-sm mb-1 block">Tình trạng</label>
+                  <select name="status" value={form.status} onChange={handleChange} className="w-full bg-surface-950 border border-surface-700 rounded-lg px-3 py-2 text-sm text-white focus:border-primary-500 focus:outline-none transition-colors">
                     {STATUS_OPTIONS.map(s => (
                       <option key={s.value} value={s.value}>{s.label}</option>
                     ))}
@@ -342,7 +398,7 @@ export default function AssetForm({ asset, onClose, onSaved, presetLocation }) {
             <button
               type="button"
               onClick={() => setStep(step - 1)}
-              className="btn-secondary"
+              className="px-4 py-2 bg-surface-800 text-white rounded-lg hover:bg-surface-700 transition-colors"
             >
               ← Quay lại
             </button>
@@ -357,7 +413,7 @@ export default function AssetForm({ asset, onClose, onSaved, presetLocation }) {
                 }
               }}
               disabled={!canNextStep}
-              className="btn-primary flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-1 px-4 py-2 bg-primary-600 text-white font-medium rounded-lg hover:bg-primary-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               {step === 1 && hasPresetLocation ? 'Tiếp tục →' : 'Tiếp tục →'}
             </button>
@@ -365,12 +421,12 @@ export default function AssetForm({ asset, onClose, onSaved, presetLocation }) {
             <button
               type="submit"
               disabled={saving || !canSubmit}
-              className="btn-primary flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-1 px-4 py-2 bg-primary-600 text-white font-medium rounded-lg hover:bg-primary-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               {saving ? 'Đang lưu...' : isEdit ? 'Cập nhật' : 'Tạo mới'}
             </button>
           )}
-          <button type="button" onClick={onClose} className="btn-secondary">
+          <button type="button" onClick={onClose} className="px-4 py-2 bg-surface-800 text-white rounded-lg hover:bg-surface-700 transition-colors">
             Huỷ
           </button>
         </div>

@@ -5,6 +5,8 @@ import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import MapPage from './pages/MapPage';
 import DashboardPage from './pages/DashboardPage';
+// NHỚ TẠO VÀ IMPORT FILE DƯỚI ĐÂY BÊN TRONG THƯ MỤC CỦA BẠN:
+import UserManagementPage from './pages/UserManagementPage';
 import MainLayout from './components/layout/MainLayout';
 
 function ProtectedRoute({ children }) {
@@ -32,18 +34,28 @@ function AppRoutes() {
     <Routes>
       <Route path="/login" element={user ? <Navigate to="/" replace /> : <LoginPage />} />
       <Route path="/register" element={user ? <Navigate to="/" replace /> : <RegisterPage />} />
+      
       <Route path="/" element={
         <ProtectedRoute>
           <MainLayout />
         </ProtectedRoute>
       }>
         <Route index element={<MapPage />} />
+        
         <Route path="dashboard" element={
-          user?.role === 'admin' || user?.role === 'technician' 
+          ['admin', 'technician', 'leader'].includes(user?.role)
             ? <DashboardPage /> 
             : <Navigate to="/" replace />
         } />
-      </Route>
+
+        {/* THÊM ROUTE QUẢN LÝ USER DÀNH RIÊNG CHO ADMIN */}
+        <Route path="users" element={
+          user?.role === 'admin'
+            ? <UserManagementPage />
+            : <Navigate to="/" replace />
+        } />
+      </Route> 
+
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

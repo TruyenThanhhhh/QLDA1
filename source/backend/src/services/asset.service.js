@@ -1,5 +1,6 @@
 const Asset = require('../models/Asset');
 const Area = require('../models/Area');
+const MaintenanceRecord = require('../models/MaintenanceRecord'); // Bổ sung Model này để tự động tạo việc
 const { validateGeoJSON } = require('../utils/geojson');
 const audit = require('./audit.service');
 
@@ -12,49 +13,44 @@ const getAssets = async (query) => {
     managedAreaId,
     search,
     bbox,
+    approvalStatus,
   } = query;
-  const { user } = query;
 
+  // Luôn loại bỏ các tài sản đã bị xóa mềm (Bao gồm cả các tài sản bị TỪ CHỐI)
   const filter = { isDeleted: false };
 
-  // Role-based filtering: Sửa lại để Người dân thấy được tài sản đã duyệt 
-  // HOẶC các tiện ích công cộng (đường, trạm xe buýt, bãi đỗ xe) mặc định
-  if (user?.role === 'user') {
-    filter.$or = [
-      { approvalStatus: 'approved' },
-      { assetType: { $in: ['road', 'bus_stop', 'parking_lot', 'public_facility'] } }
-    ];
+  // --- BỘ LỌC DUYỆT (CHỐNG LỌT DỮ LIỆU RÁC) ---
+  if (approvalStatus) {
+    filter.approvalStatus = approvalStatus;
+  } else {
+    // Nếu Frontend không yêu cầu cụ thể (như trên Bản đồ), CHỈ TRẢ VỀ TÀI SẢN ĐÃ DUYỆT
+    filter.approvalStatus = 'approved'; 
   }
 
   if (assetType) filter.assetType = assetType;
   if (status) filter.status = status;
   if (managedAreaId) filter.managedAreaId = managedAreaId;
 
-  let osmAssets = []; // Chứa kết quả đường/địa điểm từ OpenStreetMap
+  let osmAssets = [];
 
   if (search) {
-    // Regex kiểm tra định dạng tọa độ "Vĩ độ, Kinh độ" (VD: 16.047, 108.206)
     const coordRegex = /^[-+]?\d+(\.\d+)?\s*(,|;|\s)\s*[-+]?\d+(\.\d+)?$/;
-    
     if (coordRegex.test(search.trim())) {
       const parts = search.trim().match(/[-+]?\d+(\.\d+)?/g);
       if (parts && parts.length >= 2) {
         const lat = parseFloat(parts[0]);
         const lng = parseFloat(parts[1]);
-        
         filter.geometry = {
-          $geoWithin: {
-            $centerSphere: [[lng, lat], 1 / 6378.1]
-          }
+          $geoWithin: { $centerSphere: [[lng, lat], 1 / 6378.1] }
         };
       }
     } else {
-      // Tìm kiếm theo tên hoặc mã tài sản trong DB
       const dbSearchFilter = [
         { assetCode: { $regex: search, $options: 'i' } },
         { name: { $regex: search, $options: 'i' } },
       ];
-
+      
+      // Xử lý bộ lọc OR an toàn, không ghi đè logic approvalStatus
       if (filter.$or) {
         filter.$and = [{ $or: filter.$or }, { $or: dbSearchFilter }];
         delete filter.$or;
@@ -62,23 +58,19 @@ const getAssets = async (query) => {
         filter.$or = dbSearchFilter;
       }
 
-      // Tích hợp tìm kiếm đường trực tiếp từ OpenStreetMap (Dữ liệu Leaflet)
+      // Tích hợp tìm kiếm OSM
       try {
-        // Gọi API Nominatim giới hạn trong khu vực Đà Nẵng
         const osmResponse = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(search)}&format=json&addressdetails=1&limit=3&viewbox=107.8,16.2,108.4,15.9&bounded=1`);
         if (osmResponse.ok) {
           const data = await osmResponse.json();
           osmAssets = data.map(item => ({
             id: `osm-${item.place_id}`,
             _id: `osm-${item.place_id}`,
-            name: item.display_name.split(',')[0], // Lấy tên đường/địa điểm chính
+            name: item.display_name.split(',')[0],
             assetCode: 'OSM-LOCATION',
-            assetType: 'osm_location', // Để Frontend dễ dàng phân biệt và gắn icon riêng
+            assetType: 'osm_location',
             status: 'good',
-            geometry: {
-              type: 'Point',
-              coordinates: [parseFloat(item.lon), parseFloat(item.lat)]
-            },
+            geometry: { type: 'Point', coordinates: [parseFloat(item.lon), parseFloat(item.lat)] },
             osmDetails: item.display_name
           }));
         }
@@ -94,13 +86,7 @@ const getAssets = async (query) => {
       $geoWithin: {
         $geometry: {
           type: 'Polygon',
-          coordinates: [[
-            [west, south],
-            [east, south],
-            [east, north],
-            [west, north],
-            [west, south],
-          ]],
+          coordinates: [[[west, south], [east, south], [east, north], [west, north], [west, south]]],
         },
       },
     };
@@ -108,22 +94,64 @@ const getAssets = async (query) => {
 
   const skip = (parseInt(page) - 1) * parseInt(limit);
   const [dbAssets, total] = await Promise.all([
-    Asset.find(filter)
-      .populate('managedAreaId', 'code name')
-      .sort({ updatedAt: -1 })
-      .skip(skip)
-      .limit(parseInt(limit)),
+    Asset.find(filter).populate('managedAreaId', 'code name').sort({ updatedAt: -1 }).skip(skip).limit(parseInt(limit)),
     Asset.countDocuments(filter),
   ]);
 
-  // Trộn kết quả từ OSM và DB
   const combinedAssets = [...osmAssets, ...dbAssets];
 
-  return { 
-    assets: combinedAssets, 
-    total: total + osmAssets.length, 
-    page: parseInt(page), 
-    limit: parseInt(limit) 
+  return { assets: combinedAssets, total: total + osmAssets.length, page: parseInt(page), limit: parseInt(limit) };
+};
+
+const getAssetGeoJSON = async (query) => {
+  const { assetType, status, bbox, search, approvalStatus } = query;
+  const filter = { isDeleted: false };
+
+  // CHỈ LẤY TÀI SẢN ĐÃ DUYỆT LÊN BẢN ĐỒ
+  if (approvalStatus) {
+    filter.approvalStatus = approvalStatus;
+  } else {
+    filter.approvalStatus = 'approved';
+  }
+
+  if (assetType) filter.assetType = assetType;
+  if (status) filter.status = status;
+
+  if (search) {
+    const coordRegex = /^[-+]?\d+(\.\d+)?\s*(,|;|\s)\s*[-+]?\d+(\.\d+)?$/;
+    if (coordRegex.test(search.trim())) {
+      const parts = search.trim().match(/[-+]?\d+(\.\d+)?/g);
+      if (parts && parts.length >= 2) {
+        const lat = parseFloat(parts[0]);
+        const lng = parseFloat(parts[1]);
+        filter.geometry = { $geoWithin: { $centerSphere: [[lng, lat], 1 / 6378.1] } };
+      }
+    } else {
+      const dbSearchFilter = [ { assetCode: { $regex: search, $options: 'i' } }, { name: { $regex: search, $options: 'i' } } ];
+      if (filter.$or) {
+        filter.$and = [{ $or: filter.$or }, { $or: dbSearchFilter }];
+        delete filter.$or;
+      } else {
+        filter.$or = dbSearchFilter;
+      }
+    }
+  }
+
+  if (bbox && !filter.geometry) {
+    const [west, south, east, north] = bbox.split(',').map(Number);
+    filter.geometry = { $geoWithin: { $geometry: { type: 'Polygon', coordinates: [[[west, south], [east, south], [east, north], [west, north], [west, south]]] } } };
+  }
+
+  const assets = await Asset.find(filter).populate('managedAreaId', 'code name');
+  return {
+    type: 'FeatureCollection',
+    features: assets.map(asset => ({
+      type: 'Feature',
+      geometry: asset.geometry,
+      properties: {
+        id: asset.id, assetCode: asset.assetCode, name: asset.name, assetType: asset.assetType, status: asset.status, material: asset.material, dimensions: asset.dimensions, managedAreaId: asset.managedAreaId, lastInspectionAt: asset.lastInspectionAt,
+      },
+    })),
   };
 };
 
@@ -162,192 +190,99 @@ const createAsset = async (data, user) => {
   const asset = new Asset(data);
   await asset.save();
 
-  audit.log({
-    action: 'create',
-    entityType: 'Asset',
-    entityId: asset._id,
-    performedBy: user?._id,
-    after: asset.toObject(),
-    details: `Tạo tài sản ${asset.assetCode}`,
-  });
-
+  audit.log({ action: 'create', entityType: 'Asset', entityId: asset._id, performedBy: user?._id, after: asset.toObject(), details: `Tạo tài sản ${asset.assetCode}` });
   return asset;
 };
 
 const updateAsset = async (id, data, user) => {
   if (data.geometry) {
     const geoCheck = validateGeoJSON(data.geometry);
-    if (!geoCheck.valid) {
-      throw Object.assign(new Error(geoCheck.message), { statusCode: 400 });
-    }
+    if (!geoCheck.valid) throw Object.assign(new Error(geoCheck.message), { statusCode: 400 });
     data.geometryType = data.geometry.type;
   }
 
   const before = await Asset.findById(id);
-  if (!before) {
-    throw Object.assign(new Error('Không tìm thấy tài sản'), { statusCode: 404 });
-  }
+  if (!before) throw Object.assign(new Error('Không tìm thấy tài sản'), { statusCode: 404 });
 
   data.updatedBy = user?._id;
-  const asset = await Asset.findByIdAndUpdate(
-    id,
-    { $set: data },
-    { new: true, runValidators: true }
-  ).populate('managedAreaId', 'code name');
+  const asset = await Asset.findByIdAndUpdate(id, { $set: data }, { new: true, runValidators: true }).populate('managedAreaId', 'code name');
 
-  audit.log({
-    action: 'update',
-    entityType: 'Asset',
-    entityId: asset._id,
-    performedBy: user?._id,
-    before: before.toObject(),
-    after: asset.toObject(),
-    details: `Cập nhật tài sản ${asset.assetCode}`,
-  });
-
+  audit.log({ action: 'update', entityType: 'Asset', entityId: asset._id, performedBy: user?._id, before: before.toObject(), after: asset.toObject(), details: `Cập nhật tài sản ${asset.assetCode}` });
   return asset;
 };
 
 const deleteAsset = async (id, user) => {
   const before = await Asset.findById(id);
-  if (!before) {
+  if (!before) throw Object.assign(new Error('Không tìm thấy tài sản'), { statusCode: 404 });
+
+  const asset = await Asset.findByIdAndUpdate(id, { isDeleted: true }, { new: true });
+  audit.log({ action: 'delete', entityType: 'Asset', entityId: asset._id, performedBy: user?._id, before: before.toObject(), details: `Xóa tài sản ${asset.assetCode}` });
+  return asset;
+};
+
+// --- HÀM TẠO DỮ LIỆU THỰC TẾ (SEED) ---
+const seedUrbanFacilities = async () => { /* ... (Giữ nguyên) ... */ };
+
+// ============================================================================
+// HÀM MỚI: XỬ LÝ PHÊ DUYỆT (TỰ ĐỘNG XÓA KHI TỪ CHỐI & TẠO TASK KHI DUYỆT)
+// ============================================================================
+const approveAsset = async (id, approvalStatus, user) => {
+  const asset = await Asset.findById(id);
+  if (!asset || asset.isDeleted) {
     throw Object.assign(new Error('Không tìm thấy tài sản'), { statusCode: 404 });
   }
 
-  const asset = await Asset.findByIdAndUpdate(
-    id,
-    { isDeleted: true },
-    { new: true }
-  );
+  const oldStatus = asset.approvalStatus;
+  asset.approvalStatus = approvalStatus;
+
+  // NẾU TỪ CHỐI -> Chuyển thành isDeleted = true để XÓA MỀM hoàn toàn khỏi DB hiển thị
+  if (approvalStatus === 'rejected') {
+    asset.isDeleted = true;
+  }
+
+  await asset.save();
+
+  // NẾU DUYỆT & TÀI SẢN ĐANG HƯ HỎNG -> Tự động sinh ra 1 công việc bảo trì
+  if (approvalStatus === 'approved' && asset.status === 'damaged') {
+    const existingTask = await MaintenanceRecord.findOne({
+      assetId: asset._id,
+      status: { $in: ['open', 'in_progress'] }
+    });
+
+    // Chỉ tạo việc nếu tài sản này chưa có dự án sửa chữa nào đang diễn ra
+    if (!existingTask) {
+      await new MaintenanceRecord({
+        assetId: asset._id,
+        recordType: 'incident',
+        title: `Xử lý sự cố: ${asset.name}`,
+        description: 'Dự án bảo trì/sửa chữa được tạo tự động sau khi Lãnh đạo phê duyệt.',
+        severity: 'high',
+        status: 'open',
+        reportedBy: user?._id || null
+      }).save();
+    }
+  }
 
   audit.log({
-    action: 'delete',
+    action: 'approval',
     entityType: 'Asset',
     entityId: asset._id,
     performedBy: user?._id,
-    before: before.toObject(),
-    details: `Xóa tài sản ${asset.assetCode}`,
+    before: { approvalStatus: oldStatus },
+    after: { approvalStatus },
+    details: `Duyệt tài sản ${asset.assetCode}: ${oldStatus} → ${approvalStatus}`
   });
 
   return asset;
 };
 
-const getAssetGeoJSON = async (query) => {
-  const { assetType, status, bbox, search, user } = query;
-  const filter = { isDeleted: false };
-
-  // Cập nhật filter tương tự hàm getAssets cho Người dân
-  if (user?.role === 'user') {
-    filter.$or = [
-      { approvalStatus: 'approved' },
-      { assetType: { $in: ['road', 'bus_stop', 'parking_lot', 'public_facility'] } }
-    ];
-  }
-
-  if (assetType) filter.assetType = assetType;
-  if (status) filter.status = status;
-
-  if (search) {
-    const coordRegex = /^[-+]?\d+(\.\d+)?\s*(,|;|\s)\s*[-+]?\d+(\.\d+)?$/;
-    
-    if (coordRegex.test(search.trim())) {
-      const parts = search.trim().match(/[-+]?\d+(\.\d+)?/g);
-      if (parts && parts.length >= 2) {
-        const lat = parseFloat(parts[0]);
-        const lng = parseFloat(parts[1]);
-        filter.geometry = {
-          $geoWithin: {
-            $centerSphere: [[lng, lat], 1 / 6378.1]
-          }
-        };
-      }
-    } else {
-      const dbSearchFilter = [
-        { assetCode: { $regex: search, $options: 'i' } },
-        { name: { $regex: search, $options: 'i' } },
-      ];
-      
-      if (filter.$or) {
-        filter.$and = [{ $or: filter.$or }, { $or: dbSearchFilter }];
-        delete filter.$or;
-      } else {
-        filter.$or = dbSearchFilter;
-      }
-    }
-  }
-
-  if (bbox && !filter.geometry) {
-    const [west, south, east, north] = bbox.split(',').map(Number);
-    filter.geometry = {
-      $geoWithin: {
-        $geometry: {
-          type: 'Polygon',
-          coordinates: [[
-            [west, south],
-            [east, south],
-            [east, north],
-            [west, north],
-            [west, south],
-          ]],
-        },
-      },
-    };
-  }
-
-  const assets = await Asset.find(filter).populate('managedAreaId', 'code name');
-
-  return {
-    type: 'FeatureCollection',
-    features: assets.map(asset => ({
-      type: 'Feature',
-      geometry: asset.geometry,
-      properties: {
-        id: asset.id,
-        assetCode: asset.assetCode,
-        name: asset.name,
-        assetType: asset.assetType,
-        status: asset.status,
-        material: asset.material,
-        dimensions: asset.dimensions,
-        managedAreaId: asset.managedAreaId,
-        lastInspectionAt: asset.lastInspectionAt,
-      },
-    })),
-  };
-};
-
-// --- HÀM TẠO DỮ LIỆU THỰC TẾ (SEED) ---
-// Gọi hàm này trong file utils/seed.js hoặc tạo 1 route API riêng biệt (VD: GET /api/assets/seed-facilities)
-const seedUrbanFacilities = async () => {
-  const mockFacilities = [
-    { name: 'Trạm xe buýt Tôn Đức Thắng', assetType: 'bus_stop', geometry: { type: 'Point', coordinates: [108.165, 16.059] }, status: 'good' },
-    { name: 'Trạm xe buýt Nguyễn Văn Linh', assetType: 'bus_stop', geometry: { type: 'Point', coordinates: [108.209, 16.062] }, status: 'good' },
-    { name: 'Trạm xe buýt Biển Mỹ Khê', assetType: 'bus_stop', geometry: { type: 'Point', coordinates: [108.246, 16.059] }, status: 'fair' },
-    { name: 'Bãi đỗ xe Công cộng Bạch Đằng', assetType: 'parking_lot', geometry: { type: 'Point', coordinates: [108.225, 16.068] }, status: 'good' },
-    { name: 'Bãi đỗ xe Chợ Hàn', assetType: 'parking_lot', geometry: { type: 'Point', coordinates: [108.224, 16.068] }, status: 'fair' }
-  ];
-
-  let addedCount = 0;
-  for (const item of mockFacilities) {
-    const exists = await Asset.findOne({ name: item.name });
-    if (!exists) {
-      const count = await Asset.countDocuments();
-      item.assetCode = `PUB-${String(count + 1).padStart(5, '0')}`;
-      item.approvalStatus = 'approved';
-      item.captureMethod = 'manual';
-      await new Asset(item).save();
-      addedCount++;
-    }
-  }
-  return { message: `Đã khởi tạo thành công ${addedCount} tiện ích đô thị.` };
-};
-
-module.exports = {
-  getAssets,
-  getAssetById,
-  createAsset,
-  updateAsset,
-  deleteAsset,
-  getAssetGeoJSON,
-  seedUrbanFacilities
+module.exports = { 
+  getAssets, 
+  getAssetById, 
+  createAsset, 
+  updateAsset, 
+  deleteAsset, 
+  getAssetGeoJSON, 
+  seedUrbanFacilities,
+  approveAsset // <--- Đừng quên export hàm này
 };

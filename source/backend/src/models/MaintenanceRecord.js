@@ -50,6 +50,15 @@ const maintenanceRecordSchema = new mongoose.Schema({
     enum: ['open', 'in_progress', 'resolved', 'cancelled'],
     default: 'open',
   },
+  notes: {
+    type: String,
+    trim: true,
+  },
+  photos: [{
+    path: String,
+    filename: String,
+    uploadedAt: { type: Date, default: Date.now }
+  }],
   recordedAt: {
     type: Date,
     default: Date.now,

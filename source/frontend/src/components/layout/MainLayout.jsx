@@ -1,37 +1,18 @@
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { useSocket } from '../../contexts/SocketContext';
+import { useSocket } from '../../contexts/SocketContext'; 
 import { useState, useEffect } from 'react';
-
-const navItems = [
-  {
-    to: '/',
-    label: 'Bản đồ',
-    icon: (
-      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
-      </svg>
-    ),
-  },
-  {
-    to: '/dashboard',
-    label: 'Dashboard',
-    icon: (
-      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
-      </svg>
-    ),
-  },
-];
 
 const roleLabels = {
   admin: 'Quản trị viên',
+  leader: 'Lãnh đạo',
   technician: 'Nhân viên KT',
   user: 'Công dân',
 };
 
 const roleColors = {
   admin: 'bg-purple-500/20 text-purple-400',
+  leader: 'bg-pink-500/20 text-pink-400',
   technician: 'bg-blue-500/20 text-blue-400',
   user: 'bg-emerald-500/20 text-emerald-400',
 };
@@ -41,6 +22,40 @@ export default function MainLayout() {
   const navigate = useNavigate();
   const socket = useSocket();
   const [notifications, setNotifications] = useState([]);
+
+  // Tái cấu trúc NavItems ngay bên trong component để lấy role của user
+  const navItems = [
+    {
+      to: '/',
+      label: 'Bản đồ',
+      icon: (
+        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+        </svg>
+      ),
+      visible: true // Ai cũng thấy
+    },
+    {
+      to: '/dashboard',
+      label: 'Dashboard',
+      icon: (
+        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
+        </svg>
+      ),
+      visible: ['admin', 'technician', 'leader'].includes(user?.role) // Không cho user thường thấy
+    },
+    {
+      to: '/users',
+      label: 'Quản trị',
+      icon: (
+        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.008a4.123 4.123 0 00-3.399-2.02M15 19.128v0a5.269 5.269 0 01-2.493 2.493M15 19.128v0a5.269 5.269 0 01-4.242 0M15 19.128v0A9.38 9.38 0 0012 19.5c-1.136 0-2.23-.21-3.242-.587M15 19.128v0M8.25 19.128a9.38 9.38 0 00-2.625.372 9.337 9.337 0 00-4.121-.952 4.125 4.125 0 017.533-2.493M8.25 19.128v-.008a4.123 4.123 0 013.399-2.02M8.25 19.128v0A5.269 5.269 0 0010.743 21.6M12 15a3 3 0 100-6 3 3 0 000 6zM8.25 10a3 3 0 100-6 3 3 0 000 6zM15.75 10a3 3 0 100-6 3 3 0 000 6z" />
+        </svg>
+      ),
+      visible: user?.role === 'admin' // CHỈ ADMIN THẤY
+    },
+  ];
 
   useEffect(() => {
     if (!socket) return;
@@ -94,7 +109,7 @@ export default function MainLayout() {
 
           {/* Navigation */}
           <nav className="flex items-center gap-1 ml-4">
-            {navItems.filter(item => item.to === '/' || user?.role === 'admin' || user?.role === 'technician').map((item) => (
+            {navItems.filter(item => item.visible).map((item) => (
               <NavLink
                 key={item.to}
                 to={item.to}
@@ -118,12 +133,12 @@ export default function MainLayout() {
         <div className="flex items-center gap-3">
           <div className="text-right">
             <p className="text-sm text-surface-200 font-medium leading-tight">{user?.fullName}</p>
-            <span className={`inline-block text-[10px] px-1.5 py-0.5 rounded-md font-medium mt-0.5 ${roleColors[user?.role]}`}>
-              {roleLabels[user?.role]}
+            <span className={`inline-block text-[10px] px-1.5 py-0.5 rounded-md font-medium mt-0.5 ${roleColors[user?.role] || 'bg-surface-700'}`}>
+              {roleLabels[user?.role] || user?.role}
             </span>
           </div>
           <div className="w-8 h-8 bg-gradient-to-br from-surface-600 to-surface-700 rounded-lg flex items-center justify-center text-surface-300 text-sm font-semibold">
-            {user?.fullName?.charAt(0)}
+            {user?.fullName?.charAt(0) || 'U'}
           </div>
           <button
             onClick={handleLogout}
@@ -142,7 +157,7 @@ export default function MainLayout() {
         <Outlet />
         
         {/* Toast Notifications */}
-        <div className="absolute top-4 right-4 z-50 flex flex-col gap-2 pointer-events-none">
+        <div className="absolute top-4 right-4 z-[9999] flex flex-col gap-2 pointer-events-none">
           {notifications.map(n => (
             <div key={n.id} className="bg-primary-600/90 backdrop-blur-md text-white px-4 py-3 rounded-lg shadow-lg flex items-center gap-3 border border-primary-500/50 min-w-[250px] animate-[slideIn_0.3s_ease-out]">
               <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">

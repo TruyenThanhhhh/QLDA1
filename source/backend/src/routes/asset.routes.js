@@ -14,6 +14,6 @@ router.post('/', auth, rbac('admin', 'technician', 'user'), ctrl.createAsset);
 router.patch('/:id', auth, rbac('admin'), ctrl.updateAsset);
 router.delete('/:id', auth, rbac('admin'), ctrl.deleteAsset);
 router.post('/:id/photos', auth, upload.array('photos', 5), uploadCtrl.uploadPhotos);
-router.patch('/:id/approval', auth, rbac('admin', 'technician'), approvalCtrl.approveAsset);
+router.patch('/:id/approval', auth, rbac('admin', 'technician', 'leader'), approvalCtrl.approveAsset);
 
 module.exports = router;

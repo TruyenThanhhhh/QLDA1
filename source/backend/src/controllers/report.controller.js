@@ -38,4 +38,43 @@ const getOptimalRoute = async (req, res, next) => {
   }
 };
 
-module.exports = { getSummary, getIncidentsByArea, getPriorityList, getOptimalRoute };
+// =====================================
+// XUẤT BÁO CÁO (EXCEL & PDF)
+// =====================================
+const exportExcel = async (req, res, next) => {
+  try {
+    const buffer = await reportService.exportExcelReport();
+    
+    // Set headers để trình duyệt hiểu đây là file Excel tải về
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename=BaoCao_HaTang.xlsx');
+    
+    res.send(buffer);
+  } catch (err) {
+    next(err);
+  }
+};
+
+const exportPDF = async (req, res, next) => {
+  try {
+    const buffer = await reportService.exportPDFReport();
+    
+    // Set headers để trình duyệt hiểu đây là file PDF
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'attachment; filename=BaoCao_HaTang.pdf');
+    
+    res.send(buffer);
+  } catch (err) {
+    next(err);
+  }
+};
+
+// BẮT BUỘC: Phải export đầy đủ các hàm thì route mới nhận diện được
+module.exports = { 
+  getSummary, 
+  getIncidentsByArea, 
+  getPriorityList, 
+  getOptimalRoute,
+  exportExcel,
+  exportPDF
+};
