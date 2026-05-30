@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { useNavigate } from 'react-router-dom'; // ĐÃ THÊM
 
 const typeIcons = {
   road: '🛣️', sign: '🪧', traffic_light: '🚦', 
@@ -29,17 +28,25 @@ export default function AssetSidebar({
   onRouteFound 
 }) {
   const { hasRole, user } = useAuth(); 
-  const navigate = useNavigate(); // ĐÃ THÊM Hook chuyển trang
-
   const [osmResults, setOsmResults] = useState([]);
   const [isSearchingOSM, setIsSearchingOSM] = useState(false);
+  
   const [routingMode, setRoutingMode] = useState(false);
   const [startQuery, setStartQuery] = useState('');
   const [startCoords, setStartCoords] = useState(null);
   const [routeError, setRouteError] = useState('');
   const [isRouting, setIsRouting] = useState(false);
+  
   const [routeSuggestions, setRouteSuggestions] = useState([]);
   const [showRouteSuggestions, setShowRouteSuggestions] = useState(false);
+  
+  // State thay thế cho alert()
+  const [devToast, setDevToast] = useState('');
+
+  const showDevToast = (message) => {
+    setDevToast(message);
+    setTimeout(() => setDevToast(''), 3000);
+  };
 
   useEffect(() => {
     const search = filters.search?.trim();
@@ -97,6 +104,7 @@ export default function AssetSidebar({
 
   useEffect(() => {
     const query = startQuery?.trim();
+    
     if (!query || query.length < 2 || query === 'Vị trí của bạn' || startCoords !== null) {
       setRouteSuggestions([]);
       setShowRouteSuggestions(false);
@@ -260,19 +268,28 @@ export default function AssetSidebar({
   };
 
   return (
-    <div className="h-full flex flex-col bg-surface-900/95 backdrop-blur-xl border-r border-surface-700/50 font-sans">
+    <div className="h-full flex flex-col bg-surface-900/95 backdrop-blur-xl border-r border-surface-700/50 font-sans relative">
+      
+      {/* Toast thông báo thay cho Alert */}
+      {devToast && (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[100] px-4 py-2 bg-blue-600/90 backdrop-blur-md text-white rounded-lg text-sm shadow-xl border border-blue-400/50 animate-[slideUp_0.3s_ease-out] whitespace-nowrap">
+          🚧 {devToast}
+        </div>
+      )}
+
       {/* Header & Search */}
       <div className="p-4 border-b border-surface-700/50 flex-shrink-0">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-lg font-semibold text-white">Tra cứu Bản đồ</h2>
           
-          {/* ĐÃ THÊM: Nút Quản trị User dành riêng cho Admin */}
-          {user?.role === 'admin' && (
+          {/* NÚT THÊM MỚI TÀI SẢN CHO LÃNH ĐẠO / ADMIN */}
+          {(user?.role === 'admin' || user?.role === 'leader') && (
             <button 
-              onClick={() => navigate('/users')}
-              className="bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold px-2 py-1.5 rounded-md shadow-sm transition-colors flex items-center gap-1"
+              onClick={onCreateNew} 
+              className="bg-primary-600 hover:bg-primary-500 text-white text-xs font-bold px-3 py-1.5 rounded-md flex items-center gap-1 shadow-lg shadow-primary-500/20 transition-all"
             >
-              ⚙️ QUẢN TRỊ
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" /></svg>
+              THÊM MỚI
             </button>
           )}
         </div>
@@ -315,7 +332,7 @@ export default function AssetSidebar({
       </div>
 
       {/* Asset list */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto custom-scrollbar">
         {loading ? (
           <div className="flex items-center justify-center p-8">
             <div className="w-6 h-6 border-2 border-primary-500/30 border-t-primary-500 rounded-full animate-spin" />
@@ -327,11 +344,11 @@ export default function AssetSidebar({
         ) : (
           <div className="divide-y divide-surface-700/30">
             {combinedAssets.map((asset) => (
-              <div key={asset.id} className="flex flex-col">
+              <div key={asset.id || asset._id} className="flex flex-col">
                 <button
                   onClick={() => onAssetClick(asset)}
                   className={`w-full text-left px-4 py-3 hover:bg-surface-800/50 transition-colors duration-150 ${
-                    selectedAssetId === asset.id ? 'bg-primary-600/10 border-l-2 border-primary-500' : ''
+                    selectedAssetId === (asset.id || asset._id) ? 'bg-primary-600/10 border-l-2 border-primary-500' : ''
                   }`}
                 >
                   <div className="flex items-start gap-2.5">
@@ -354,7 +371,7 @@ export default function AssetSidebar({
                 </button>
 
                 {/* KHU VỰC HIỂN THỊ KHI ĐƯỢC CHỌN */}
-                {selectedAssetId === asset.id && (
+                {selectedAssetId === (asset.id || asset._id) && (
                   <div className="px-4 pb-4 pt-1 bg-primary-600/5">
                     
                     {/* View Mặc định: Hiển thị nút theo Role */}
@@ -372,19 +389,13 @@ export default function AssetSidebar({
                         {user?.role === 'leader' || user?.role === 'admin' ? (
                           <>
                             <button 
-                              onClick={() => alert('Chức năng GIAO VIỆC đang được phát triển')}
+                              onClick={() => showDevToast('Chức năng GIAO VIỆC đang được phát triển')}
                               className="flex-1 bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold py-2 px-1 rounded-md transition-colors flex items-center justify-center gap-1 shadow-sm min-w-[100px]"
                             >
                               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
                               GIAO VIỆC
                             </button>
-                            <button 
-                              onClick={() => alert('Chức năng PHÊ DUYỆT đang được phát triển')}
-                              className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold py-2 px-1 rounded-md transition-colors flex items-center justify-center gap-1 shadow-sm min-w-[100px]"
-                            >
-                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-                              PHÊ DUYỆT
-                            </button>
+                            {/* ĐÃ XÓA NÚT PHÊ DUYỆT THEO YÊU CẦU */}
                           </>
                         ) : (
                           <button 

@@ -15,7 +15,8 @@ const assetSchema = new mongoose.Schema({
   assetType: {
     type: String,
     required: true,
-    enum: ['road', 'sign', 'traffic_light', 'manhole', 'lamp_post', 'sidewalk'],
+    // ĐÃ BỔ SUNG: 'tree' (Cây xanh)
+    enum: ['road', 'sign', 'traffic_light', 'manhole', 'lamp_post', 'sidewalk', 'tree'],
   },
   geometryType: {
     type: String,
@@ -32,6 +33,11 @@ const assetSchema = new mongoose.Schema({
       type: mongoose.Schema.Types.Mixed,
       required: true,
     },
+  },
+  // ĐÃ BỔ SUNG: Trường thông tin quy hoạch
+  planningInfo: {
+    type: String,
+    trim: true,
   },
   material: {
     type: String,
@@ -70,11 +76,11 @@ const assetSchema = new mongoose.Schema({
     originalName: String,
     path: String,
     size: Number,
-    aiTags: [String], // Nhãn tự động từ Cloudinary/AI
+    aiTags: [String], 
     aiSeverity: {
       type: String,
       enum: ['low', 'medium', 'high', 'critical', 'normal'],
-    }, // Đề xuất độ nghiêm trọng từ AI
+    }, 
     uploadedAt: {
       type: Date,
       default: Date.now,

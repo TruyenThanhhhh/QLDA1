@@ -1,11 +1,11 @@
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import client from '../api/client';
 import { useAuth } from '../contexts/AuthContext';
 import Map from '../components/map/Map';
 import AssetSidebar from '../components/assets/AssetSidebar';
 import AssetDetail from '../components/assets/AssetDetail';
-import DamagePointForm from '../components/assets/DamagePointForm';
+import AssetForm from '../components/assets/AssetForm'; 
 
 export default function MapPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -34,7 +34,8 @@ export default function MapPage() {
       if (filters.status) params.status = filters.status;
       if (filters.search) params.search = filters.search;
       const res = await client.get('/assets', { params });
-      setAssets(res.data.items);
+      // Hỗ trợ cả 2 cấu trúc trả về của API để tránh lỗi mapping
+      setAssets(res.data.items || res.data.data?.assets || res.data); 
     } catch (err) {
       console.error('Failed to fetch assets:', err);
     } finally {
@@ -59,7 +60,7 @@ export default function MapPage() {
   useEffect(() => {
     const assetId = searchParams.get('assetId') || selectedAsset?.id;
     if (assetId && assets.length > 0) {
-      const found = assets.find(a => a.id === assetId);
+      const found = assets.find(a => a.id === assetId || a._id === assetId);
       if (found && JSON.stringify(found) !== JSON.stringify(selectedAsset)) {
         setSelectedAsset(found);
       }
@@ -88,6 +89,21 @@ export default function MapPage() {
     setIsPickingLocation(false);
   };
 
+  const handleDeleteAsset = async (id) => {
+    try {
+      await client.delete(`/assets/${id}`);
+      setToastMessage('Đã xóa tài sản thành công!');
+      setTimeout(() => setToastMessage(''), 3000);
+      if (selectedAsset?.id === id || selectedAsset?._id === id) {
+        setSelectedAsset(null);
+      }
+      fetchAssets();
+    } catch (err) {
+      console.error(err);
+      alert('Có lỗi xảy ra khi xóa tài sản.');
+    }
+  };
+
   const handleFormClose = () => {
     setShowForm(false);
     setEditingAsset(null);
@@ -101,7 +117,7 @@ export default function MapPage() {
     setIsPickingLocation(false);
     setPresetLocation(null);
     fetchAssets();
-    setToastMessage('Thao tác thành công !');
+    setToastMessage('Lưu thông tin thành công!');
     setTimeout(() => setToastMessage(''), 3000);
   };
 
@@ -138,11 +154,11 @@ export default function MapPage() {
   };
 
   return (
-    <div className="h-full flex relative min-w-0 min-h-0">
+    <div className="h-full flex relative min-w-0 min-h-0 bg-surface-950 font-sans">
       {/* Sidebar toggle button */}
       <button
         onClick={() => setSidebarOpen(!sidebarOpen)}
-        className="absolute top-3 left-3 z-[1000] p-2 bg-surface-800/90 backdrop-blur-xl border border-surface-700/50 rounded-lg text-surface-300 hover:text-white hover:bg-surface-700/90 transition-all duration-200 shadow-lg"
+        className="absolute top-3 left-3 z-[1000] p-2 bg-surface-800/90 backdrop-blur-xl border border-surface-700/50 rounded-lg text-surface-300 hover:text-white shadow-lg transition-all duration-200"
       >
         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
           {sidebarOpen ? (
@@ -162,7 +178,9 @@ export default function MapPage() {
           onFilterChange={setFilters}
           onAssetClick={handleAssetClick}
           onCreateNew={handleCreateNew}
-          selectedAssetId={selectedAsset?.id}
+          onEditAsset={handleEdit}
+          onDeleteAsset={handleDeleteAsset}
+          selectedAssetId={selectedAsset?.id || selectedAsset?._id}
         />
       </div>
 
@@ -172,7 +190,7 @@ export default function MapPage() {
           assets={assets}
           areas={areas}
           onAssetClick={handleAssetClick}
-          selectedAssetId={selectedAsset?.id}
+          selectedAssetId={selectedAsset?.id || selectedAsset?._id}
           focusAsset={selectedAsset}
           isPickingLocation={isPickingLocation}
           onLocationPicked={handleLocationPicked}
@@ -223,16 +241,16 @@ export default function MapPage() {
         )}
 
         {isPickingLocation && (
-          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-[1000] px-4 py-2 bg-blue-600/90 backdrop-blur-sm rounded-full text-white text-sm font-medium shadow-lg animate-bounce">
-            Click vao ban do de danh dau diem hu hong
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-[1000] px-6 py-3 bg-blue-600/90 backdrop-blur-md rounded-full text-white text-sm font-medium shadow-[0_10px_30px_rgba(37,99,235,0.5)] animate-bounce border border-blue-400/50">
+            👇 Click vào bản đồ để ghim tọa độ
           </div>
         )}
       </div>
 
       {/* Toast Notification */}
       {toastMessage && (
-        <div className="absolute top-4 right-4 z-[2000] animate-fade-in">
-          <div className="bg-emerald-500/90 backdrop-blur-md text-white px-6 py-3 rounded-xl shadow-lg border border-emerald-400/50 flex items-center gap-2">
+        <div className="absolute top-4 right-4 z-[2000] animate-[slideIn_0.3s_ease-out]">
+          <div className="bg-emerald-600/90 backdrop-blur-md text-white px-6 py-3 rounded-xl shadow-lg border border-emerald-500/50 flex items-center gap-3">
             <svg className="w-5 h-5 text-emerald-100" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
             </svg>
@@ -243,9 +261,9 @@ export default function MapPage() {
 
       {/* Right panel - Asset detail or form */}
       {(selectedAsset || showForm) && (
-        <div className="w-96 min-w-0 flex-shrink-0 border-l border-surface-700/50 bg-surface-900/95 backdrop-blur-xl overflow-y-auto animate-slide-right">
+        <div className="w-96 min-w-0 flex-shrink-0 border-l border-surface-700/50 bg-surface-900/95 backdrop-blur-xl overflow-y-auto animate-[slideInRight_0.3s_ease-out]">
           {showForm ? (
-            <DamagePointForm
+            <AssetForm
               asset={editingAsset}
               onClose={handleFormClose}
               onSaved={handleFormSaved}
