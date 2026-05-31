@@ -37,6 +37,7 @@ const getAllTasks = async (query = {}) => {
     
     let progress = 0;
     if (obj.status === 'in_progress') progress = 50;
+    if (obj.status === 'pending_approval') progress = 90;
     if (obj.status === 'resolved') progress = 100;
 
     return {
@@ -165,11 +166,62 @@ const assignTaskByAssetId = async (assetId, technicianId, user) => {
   return record;
 };
 
+// 3. Nghiệm thu công việc (Lãnh đạo phê duyệt/từ chối hoàn thành sửa chữa)
+const acceptTask = async (id, approvalStatus, leaderNotes, user) => {
+  if (!['approved', 'rejected'].includes(approvalStatus)) {
+    throw Object.assign(new Error('Trạng thái nghiệm thu không hợp lệ (approved | rejected)'), { statusCode: 400 });
+  }
+
+  const record = await MaintenanceRecord.findById(id);
+  if (!record) {
+    throw Object.assign(new Error('Không tìm thấy bản ghi bảo trì'), { statusCode: 404 });
+  }
+
+  const before = record.toObject();
+
+  if (approvalStatus === 'approved') {
+    record.status = 'resolved';
+    record.resolvedAt = new Date();
+    if (leaderNotes) {
+      record.notes = leaderNotes;
+    }
+
+    // Tự động chuyển trạng thái của Asset sang 'good' để hiển thị xanh trên OSM map
+    await Asset.findByIdAndUpdate(record.assetId, {
+      $set: {
+        status: 'good',
+        needsMaintenance: false,
+        riskScore: 0
+      }
+    });
+  } else if (approvalStatus === 'rejected') {
+    record.status = 'in_progress'; // Bắt buộc KTV sửa chữa lại
+    if (leaderNotes) {
+      record.notes = `[Lãnh đạo từ chối nghiệm thu]: ${leaderNotes}`;
+    }
+  }
+
+  await record.save();
+
+  audit.log({
+    action: 'update',
+    entityType: 'MaintenanceRecord',
+    entityId: record._id,
+    performedBy: user._id,
+    before,
+    after: record.toObject(),
+    details: `Nghiệm thu công việc: Lãnh đạo ${approvalStatus === 'approved' ? 'duyệt' : 'từ chối'}`,
+  });
+
+  return record;
+};
+
 module.exports = { 
   getByAsset, 
   getAllTasks, 
   create, 
   update, 
   getTechnicians, 
-  assignTaskByAssetId 
+  assignTaskByAssetId,
+  acceptTask
 };

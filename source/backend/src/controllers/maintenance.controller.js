@@ -80,10 +80,7 @@ const exportTasksPDF = async (req, res, next) => {
 
 const uploadPhotos = async (req, res, next) => {
   try {
-    console.log("=> Đang nhận API Upload ảnh cho task:", req.params.id);
-    
     if (!req.files || req.files.length === 0) {
-      console.log("=> Không tìm thấy file trong request.");
       return res.status(400).json({ success: false, message: 'Không có ảnh nào được tải lên' });
     }
 
@@ -94,7 +91,6 @@ const uploadPhotos = async (req, res, next) => {
 
     const record = await MaintenanceRecord.findById(req.params.id);
     if (!record) {
-      console.log("=> Lỗi: Không tìm thấy task trong Database");
       return res.status(404).json({ success: false, message: 'Không tìm thấy công việc' });
     }
 
@@ -103,7 +99,6 @@ const uploadPhotos = async (req, res, next) => {
     record.photos.push(...newPhotos);
     await record.save();
 
-    console.log("=> Upload ảnh thành công!");
     getIo().emit('new_maintenance_event', { type: 'UPDATE_MAINTENANCE', data: record });
     success(res, { id: record._id, message: 'Tải ảnh thành công', photos: record.photos });
   } catch (err) {
@@ -132,4 +127,19 @@ const assignByAsset = async (req, res, next) => {
   }
 };
 
-module.exports = { getByAsset, getAllTasks, create, update, exportTasksPDF, uploadPhotos, getTechnicians, assignByAsset };
+const acceptTask = async (req, res, next) => {
+  try {
+    const { approvalStatus, notes } = req.body;
+    const record = await maintenanceService.acceptTask(req.params.id, approvalStatus, notes, req.user);
+    getIo().emit('new_maintenance_event', { type: 'UPDATE_MAINTENANCE', data: record });
+    success(res, {
+      id: record.id,
+      status: record.status,
+      message: approvalStatus === 'approved' ? 'Đã nghiệm thu hoàn thành công việc' : 'Đã từ chối nghiệm thu, yêu cầu thi công lại'
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+module.exports = { getByAsset, getAllTasks, create, update, exportTasksPDF, uploadPhotos, getTechnicians, assignByAsset, acceptTask };

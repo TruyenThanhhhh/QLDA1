@@ -11,6 +11,7 @@ const importGeoJSON = async (req, res, next) => {
     }
 
     const results = { imported: 0, errors: [] };
+    const baseCount = await Asset.countDocuments();
 
     for (let i = 0; i < features.length; i++) {
       const feature = features[i];
@@ -23,11 +24,10 @@ const importGeoJSON = async (req, res, next) => {
 
         const props = feature.properties || {};
         const prefix = (assetType || 'AST').substring(0, 3).toUpperCase();
-        const count = await Asset.countDocuments();
 
         const asset = new Asset({
-          assetCode: props.assetCode || `${prefix}-${String(count + i + 1).padStart(5, '0')}`,
-          name: props.name || `Tài sản ${count + i + 1}`,
+          assetCode: props.assetCode || `${prefix}-${String(baseCount + results.imported + 1).padStart(5, '0')}`,
+          name: props.name || `Tài sản ${baseCount + results.imported + 1}`,
           assetType: assetType || props.assetType || 'road',
           geometryType: feature.geometry.type,
           geometry: feature.geometry,

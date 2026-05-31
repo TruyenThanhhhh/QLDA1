@@ -16,6 +16,7 @@ router.get('/tasks', auth, rbac('admin', 'technician', 'leader'), ctrl.getAllTas
 router.get('/tasks/export-pdf', auth, rbac('admin', 'leader'), ctrl.exportTasksPDF);
 router.get('/technicians', auth, rbac('admin', 'leader'), ctrl.getTechnicians);
 router.patch('/assign-by-asset/:assetId', auth, rbac('admin', 'leader'), ctrl.assignByAsset);
+router.patch('/maintenance/:id/acceptance', auth, rbac('admin', 'leader'), ctrl.acceptTask);
 
 // ROUTE UPLOAD ẢNH (Đã được định nghĩa chính xác)
 router.post('/maintenance/:id/photos', auth, upload.array('photos', 5), ctrl.uploadPhotos);

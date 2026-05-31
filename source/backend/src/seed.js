@@ -53,7 +53,11 @@ const users = [
   { username: 'lanhdao', fullName: 'Tran Van Lanh Dao', role: 'leader', passwordHash: 'leader123' },
   { username: 'kythuat', fullName: 'Tran Thi Ky Thuat', role: 'technician', passwordHash: 'kythuat123' },
   { username: 'nhandan', fullName: 'Le Van Dan', role: 'user', passwordHash: 'user123' },
+  { username: 'admin_project', fullName: 'Admin Dự Án', role: 'admin', passwordHash: 'admin123' },
+  { username: 'nhanvien_kt', fullName: 'Kỹ Thuật Viên Dự Án', role: 'technician', passwordHash: 'kt123' },
+  { username: 'nguoidung_vip', fullName: 'Người Dùng VIP', role: 'user', passwordHash: 'user123' },
 ];
+
 
 const roadDefinitions = [
   { name: 'Duong Bach Dang', area: 0, coords: [

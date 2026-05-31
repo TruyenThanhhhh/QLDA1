@@ -68,6 +68,7 @@ function TechnicianDashboard({ user }) {
   const STATUS_CONFIG = {
     open: { title: 'MỚI NHẬN / CHỜ XỬ LÝ', color: 'border-blue-500', bg: 'bg-blue-500/10', text: 'text-blue-400', icon: '📥' },
     in_progress: { title: 'ĐANG THI CÔNG', color: 'border-amber-500', bg: 'bg-amber-500/10', text: 'text-amber-400', icon: '🚧' },
+    pending_approval: { title: 'CHỜ NGHIỆM THU', color: 'border-purple-500', bg: 'bg-purple-500/10', text: 'text-purple-400', icon: '⏳' },
     resolved: { title: 'ĐÃ HOÀN THÀNH', color: 'border-emerald-500', bg: 'bg-emerald-500/10', text: 'text-emerald-400', icon: '✅' }
   };
   
@@ -78,7 +79,7 @@ function TechnicianDashboard({ user }) {
     critical: 'bg-purple-500/20 text-purple-400 animate-pulse'
   };
 
-  const [tasks, setTasks] = useState({ open: [], in_progress: [], resolved: [] });
+  const [tasks, setTasks] = useState({ open: [], in_progress: [], pending_approval: [], resolved: [] });
   const [loading, setLoading] = useState(true);
   const [selectedTask, setSelectedTask] = useState(null);
   const [updateForm, setUpdateForm] = useState({ status: '', notes: '' });
@@ -100,7 +101,7 @@ function TechnicianDashboard({ user }) {
       const rawTasks = res.data?.data || res.data || [];
       const myTasks = rawTasks.filter(t => t.assignee === user.fullName);
       
-      const grouped = { open: [], in_progress: [], resolved: [] };
+      const grouped = { open: [], in_progress: [], pending_approval: [], resolved: [] };
       myTasks.forEach(task => {
         if (grouped[task.status]) grouped[task.status].push(task);
       });
@@ -136,7 +137,22 @@ function TechnicianDashboard({ user }) {
   const handleSubmitUpdate = async (e) => {
     e.preventDefault();
     setIsUpdating(true);
-    
+
+    // --- BẮT ĐẦU KIỂM TRA ĐIỀU KIỆN NGHIỆM THU ---
+    if (updateForm.status === 'pending_approval') {
+      if (!updateForm.notes || !updateForm.notes.trim()) {
+        showToast('Bắt buộc phải nhập mô tả nghiệm thu tại phần Ghi chú!', 'error');
+        setIsUpdating(false);
+        return;
+      }
+      if (uploadedFiles.length === 0 && (!selectedTask.photos || selectedTask.photos.length === 0)) {
+        showToast('Bắt buộc phải tải lên ít nhất 1 ảnh nghiệm thu sau sửa chữa!', 'error');
+        setIsUpdating(false);
+        return;
+      }
+    }
+    // --- KẾT THÚC KIỂM TRA ---
+
     try {
       const taskId = selectedTask.id || selectedTask._id;
 
@@ -208,7 +224,7 @@ function TechnicianDashboard({ user }) {
       {currentTab === 'kanban' ? (
         <div className="flex-1 overflow-x-auto p-6">
           <div className="flex gap-6 h-full min-w-[900px]">
-            {['open', 'in_progress', 'resolved'].map(statusKey => (
+            {['open', 'in_progress', 'pending_approval', 'resolved'].map(statusKey => (
               <div key={statusKey} className="flex-1 flex flex-col bg-surface-900/40 rounded-xl border border-surface-800 overflow-hidden">
                 <div className={`p-4 border-b-2 ${STATUS_CONFIG[statusKey].color} bg-surface-800/80 flex justify-between items-center`}>
                   <h3 className={`font-bold text-sm tracking-wide ${STATUS_CONFIG[statusKey].text} flex items-center gap-2`}>
@@ -341,7 +357,7 @@ function TechnicianDashboard({ user }) {
                     {[
                       { val: 'open', label: 'Chưa làm', color: 'peer-checked:border-blue-500 peer-checked:bg-blue-500/10 peer-checked:text-blue-400' },
                       { val: 'in_progress', label: 'Đang thi công', color: 'peer-checked:border-amber-500 peer-checked:bg-amber-500/10 peer-checked:text-amber-400' },
-                      { val: 'resolved', label: 'Đã hoàn thành', color: 'peer-checked:border-emerald-500 peer-checked:bg-emerald-500/10 peer-checked:text-emerald-400' }
+                      { val: 'pending_approval', label: 'Gửi nghiệm thu', color: 'peer-checked:border-purple-500 peer-checked:bg-purple-500/10 peer-checked:text-purple-400' }
                     ].map(opt => (
                       <label key={opt.val} className="relative cursor-pointer">
                         <input type="radio" name="status" value={opt.val} checked={updateForm.status === opt.val} onChange={(e) => setUpdateForm({...updateForm, status: e.target.value})} className="peer sr-only" />
@@ -417,6 +433,8 @@ function LeaderDashboard({ user }) {
   const [loading, setLoading] = useState(true);
   const [isExportingExcel, setIsExportingExcel] = useState(false);
   const [isExportingPDF, setIsExportingPDF] = useState(false);
+  
+  const [maintenanceModal, setMaintenanceModal] = useState({ isOpen: false, taskId: null, status: null, taskTitle: '', notes: '' });
   
   const [processingId, setProcessingId] = useState(null);
   const [confirmModal, setConfirmModal] = useState({ isOpen: false, assetId: null, status: null, assetName: '' });
@@ -495,6 +513,36 @@ function LeaderDashboard({ user }) {
     } catch (error) {
       console.error('Lỗi phê duyệt:', error);
       showToast('Đã xảy ra lỗi khi xử lý.', 'error');
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  const handleOpenMaintenanceAcceptance = (taskId, status, taskTitle) => {
+    setMaintenanceModal({ isOpen: true, taskId, status, taskTitle, notes: '' });
+  };
+
+  const executeMaintenanceAcceptance = async () => {
+    const { taskId, status, notes } = maintenanceModal;
+    setMaintenanceModal({ isOpen: false, taskId: null, status: null, taskTitle: '', notes: '' });
+    setProcessingId(taskId);
+
+    try {
+      await client.patch(`/maintenance/${taskId}/acceptance`, {
+        approvalStatus: status === 'approved' ? 'approved' : 'rejected',
+        notes: notes.trim() || undefined
+      });
+
+      if (status === 'approved') {
+        showToast('Đã nghiệm thu hoàn thành công việc và cập nhật trạng thái tài sản thành hoạt động tốt!', 'success');
+      } else {
+        showToast('Đã từ chối nghiệm thu và yêu cầu Kỹ thuật viên thi công lại!', 'error');
+      }
+
+      await fetchDashboardData(); 
+    } catch (error) {
+      console.error('Lỗi nghiệm thu:', error);
+      showToast('Đã xảy ra lỗi khi nghiệm thu công việc.', 'error');
     } finally {
       setProcessingId(null);
     }
@@ -694,6 +742,50 @@ function LeaderDashboard({ user }) {
         </div>
       )}
 
+      {/* Modal Nghiệm Thu Bảo Trì */}
+      {maintenanceModal.isOpen && (
+        <div className="fixed inset-0 z-[55] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-[fadeIn_0.2s_ease-out]">
+          <div className="bg-surface-900 border border-surface-700 p-6 rounded-xl shadow-2xl max-w-md w-full mx-4 animate-[slideUp_0.3s_ease-out]">
+            <h3 className="text-lg font-bold text-white mb-2">
+              Xác nhận {maintenanceModal.status === 'approved' ? 'Phê duyệt nghiệm thu' : 'Yêu cầu thi công lại'}
+            </h3>
+            <p className="text-sm text-surface-300 mb-4">
+              Bạn có chắc chắn muốn <strong className={maintenanceModal.status === 'approved' ? 'text-emerald-400' : 'text-red-400'}>
+                {maintenanceModal.status === 'approved' ? 'PHÊ DUYỆT' : 'TỪ CHỐI'}
+              </strong> yêu cầu nghiệm thu công việc: <br/>
+              <span className="text-white mt-1 inline-block font-semibold">"{maintenanceModal.taskTitle}"</span> không?
+            </p>
+
+            <div className="mb-6">
+              <label className="block text-xs font-medium text-surface-400 mb-2 uppercase tracking-wider">
+                {maintenanceModal.status === 'approved' ? 'Ghi chú phê duyệt (Tùy chọn)' : 'Lý do từ chối sửa chữa (Bắt buộc)'}
+              </label>
+              <textarea 
+                rows="3"
+                value={maintenanceModal.notes}
+                onChange={e => setMaintenanceModal({ ...maintenanceModal, notes: e.target.value })}
+                placeholder={maintenanceModal.status === 'approved' ? 'Đã hoàn thành rất tốt...' : 'Gạch lát chưa đều, cần làm phẳng lại mặt đường...'}
+                className="w-full bg-surface-950 border border-surface-700 text-surface-200 text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-purple-500 transition-colors resize-none"
+              />
+            </div>
+
+            <div className="flex justify-end gap-3">
+              <button onClick={() => setMaintenanceModal({ isOpen: false, taskId: null, status: null, taskTitle: '', notes: '' })} className="px-4 py-2 text-sm font-medium text-surface-300 hover:text-white bg-surface-800 hover:bg-surface-700 rounded-lg transition-colors">Hủy bỏ</button>
+              <button 
+                onClick={executeMaintenanceAcceptance} 
+                disabled={maintenanceModal.status === 'rejected' && !maintenanceModal.notes.trim()}
+                className={`px-4 py-2 text-sm font-medium text-white rounded-lg transition-colors ${
+                  maintenanceModal.status === 'rejected' && !maintenanceModal.notes.trim() ? 'bg-surface-700 text-surface-500 cursor-not-allowed' :
+                  maintenanceModal.status === 'approved' ? 'bg-emerald-600 hover:bg-emerald-500 shadow-lg shadow-emerald-500/25' : 'bg-red-600 hover:bg-red-500 shadow-lg shadow-red-500/25'
+                }`}
+              >
+                Xác nhận
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="max-w-7xl mx-auto space-y-6 relative z-10">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 mb-2 border-b border-surface-800 pb-4">
           <div>
@@ -754,6 +846,8 @@ function LeaderDashboard({ user }) {
             handleApproval={handleOpenConfirm} 
             processingId={processingId}
             handleAssignTask={handleAssignTask}
+            constructions={constructions}
+            handleMaintenanceAcceptance={handleOpenMaintenanceAcceptance}
           />
         ) : (
           <ConstructionDashboard constructions={constructions} />
@@ -765,7 +859,7 @@ function LeaderDashboard({ user }) {
 }
 
 // Các Component con của Lãnh Đạo
-function OverviewDashboard({ summary, incidents = [], priority = [], pendingAssets = [], predictiveList = [], isLeader, handleApproval, processingId, handleAssignTask }) {
+function OverviewDashboard({ summary, incidents = [], priority = [], pendingAssets = [], predictiveList = [], isLeader, handleApproval, processingId, handleAssignTask, constructions = [], handleMaintenanceAcceptance }) {
   const safeIncidents = Array.isArray(incidents) ? incidents : [];
   const safePriority = Array.isArray(priority) ? priority : [];
   const safePending = Array.isArray(pendingAssets) ? pendingAssets : [];
@@ -833,6 +927,59 @@ function OverviewDashboard({ summary, incidents = [], priority = [], pendingAsse
                     <button 
                       onClick={() => handleApproval(asset.id || asset._id, 'rejected', asset.name)}
                       disabled={processingId === (asset.id || asset._id)}
+                      className="flex-1 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 font-semibold py-1.5 rounded text-xs transition flex justify-center items-center gap-1"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg> Từ chối
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 2. YÊU CẦU NGHIỆM THU CÔNG VIỆC BẢO TRÌ */}
+      {constructions && constructions.filter(c => c.status === 'pending_approval').length > 0 && (
+        <div className="bg-surface-900 border border-purple-500/30 rounded-xl p-5 shadow-lg relative overflow-hidden my-4">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/5 rounded-bl-full pointer-events-none" />
+          <h3 className="text-base font-semibold text-white mb-4 flex items-center gap-2 relative z-10">
+            <span className="text-purple-400">⏳</span> Yêu Cầu Nghiệm Thu Bảo Trì Chờ Phê Duyệt
+            <span className="ml-2 text-xs bg-purple-500/20 text-purple-400 px-2.5 py-1 rounded-full font-bold">
+              {constructions.filter(c => c.status === 'pending_approval').length} yêu cầu
+            </span>
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 relative z-10">
+            {constructions.filter(c => c.status === 'pending_approval').map((task) => (
+              <div key={task.id || task._id} className="flex flex-col gap-3 p-4 bg-surface-800/50 hover:bg-surface-800 transition-colors rounded-lg border border-surface-700">
+                <div className="flex gap-3">
+                  <div className="w-12 h-12 rounded-lg bg-surface-700 flex-shrink-0 overflow-hidden flex items-center justify-center text-xl border border-surface-600">
+                    {task.photos?.[0] ? <img src={getValidImageUrl(task.photos[0])} alt="" className="w-full h-full object-cover" /> : '🛠️'}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm text-surface-100 font-bold truncate" title={task.title}>{task.title}</p>
+                    <p className="text-[11px] text-surface-400 mt-0.5">Tài sản: {task.assetName}</p>
+                    <p className="text-[11px] text-surface-500 mt-0.5">KTV phụ trách: {task.assignee}</p>
+                  </div>
+                </div>
+                
+                <div className="bg-surface-950 p-2.5 rounded-lg border border-surface-850 text-xs text-surface-300">
+                  <span className="text-[10px] font-semibold text-purple-400 block mb-1">MÔ TẢ KẾT QUẢ SỬA CHỮA:</span>
+                  <p className="italic line-clamp-2">"{task.notes}"</p>
+                </div>
+
+                {isLeader && (
+                  <div className="flex gap-2 mt-1 pt-3 border-t border-surface-700/50">
+                    <button 
+                      onClick={() => handleMaintenanceAcceptance(task.id || task._id, 'approved', task.title)}
+                      disabled={processingId === (task.id || task._id)}
+                      className="flex-1 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-semibold py-1.5 rounded text-xs transition flex justify-center items-center gap-1"
+                    >
+                      {processingId === (task.id || task._id) ? 'Đang xử lý...' : <><svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg> Duyệt</>}
+                    </button>
+                    <button 
+                      onClick={() => handleMaintenanceAcceptance(task.id || task._id, 'rejected', task.title)}
+                      disabled={processingId === (task.id || task._id)}
                       className="flex-1 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 font-semibold py-1.5 rounded text-xs transition flex justify-center items-center gap-1"
                     >
                       <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg> Từ chối

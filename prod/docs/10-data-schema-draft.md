@@ -91,7 +91,12 @@ Luu thong tin su co va bao tri gan voi mot tai san.
 - `title`: string, required
 - `description`: string
 - `severity`: enum `low | medium | high | critical`
-- `status`: enum `open | in_progress | resolved | cancelled`
+- `status`: enum `open | in_progress | pending_approval | resolved | cancelled`
+- `notes`: string (Ghi chú/Mô tả kết quả hoặc lý do phản hồi)
+- `photos`: array of photo objects (Hình ảnh hiện trường sau khi sửa chữa)
+  - `path`: string
+  - `filename`: string
+  - `uploadedAt`: datetime
 - `reportedBy`: ObjectId, ref `User`
 - `performedBy`: ObjectId, ref `User`, nullable, role `technician`
 - `costEstimate`: number, nullable

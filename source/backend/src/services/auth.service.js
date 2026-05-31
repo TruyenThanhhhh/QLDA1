@@ -2,14 +2,13 @@ const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 
 const login = async (username, password) => {
-  const user = await User.findOne({ username, isActive: true }).select('+passwordHash');
+  const user = await User.findOne({ username: username.toLowerCase(), isActive: true }).select('+passwordHash');
   if (!user) {
+
     throw Object.assign(new Error('Tên đăng nhập hoặc mật khẩu không đúng'), { statusCode: 401 });
   }
 
-  // Need to get passwordHash since toJSON removes it
-  const userDoc = await User.findOne({ username }).select('+passwordHash');
-  const isMatch = await userDoc.comparePassword(password);
+  const isMatch = await user.comparePassword(password);
   if (!isMatch) {
     throw Object.assign(new Error('Tên đăng nhập hoặc mật khẩu không đúng'), { statusCode: 401 });
   }

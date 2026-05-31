@@ -56,7 +56,7 @@ export default function ChatWidget() {
       const botReply = {
         id: Date.now() + 1,
         sender: 'bot',
-        text: res.data?.data?.reply || 'Tôi đã nhận được tin nhắn của bạn.',
+        text: res.data?.reply || 'Tôi đã nhận được tin nhắn của bạn.',
         time: new Date(),
       };
 

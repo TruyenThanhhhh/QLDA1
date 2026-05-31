@@ -323,6 +323,34 @@ Cho phep cap nhat `status`, `description`, `performedBy`, `costEstimate`, `costA
 }
 ```
 
+### `PATCH /api/maintenance/:id/acceptance`
+
+Nghiệm thu sự cố/bảo trì. Lãnh đạo duyệt hoặc từ chối kết quả sửa chữa của kỹ thuật viên.
+
+### Request
+
+*(Role: `admin`, `leader`)*
+
+```json
+{
+  "approvalStatus": "approved",
+  "notes": "Đã sửa hoàn tất mặt đường phẳng đẹp"
+}
+```
+
+*Lưu ý: "approvalStatus" nhận giá trị "approved" (Duyệt) hoặc "rejected" (Từ chối). "notes" bắt buộc nhập khi từ chối.*
+
+### Response 200
+
+```json
+{
+  "id": "record_id",
+  "status": "resolved",
+  "message": "Đã nghiệm thu hoàn thành công việc"
+}
+```
+
+
 ## 5. Reports
 
 ### `GET /api/reports/summary`

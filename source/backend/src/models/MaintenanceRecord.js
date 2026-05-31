@@ -47,7 +47,7 @@ const maintenanceRecordSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['open', 'in_progress', 'resolved', 'cancelled'],
+    enum: ['open', 'in_progress', 'pending_approval', 'resolved', 'cancelled'],
     default: 'open',
   },
   notes: {
