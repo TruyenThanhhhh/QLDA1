@@ -25,7 +25,8 @@ export default function AssetSidebar({
   onAssetClick, 
   onCreateNew, 
   selectedAssetId,
-  onRouteFound 
+  onRouteFound,
+  onReportError
 }) {
   const { hasRole, user } = useAuth(); 
   const [osmResults, setOsmResults] = useState([]);
@@ -282,8 +283,8 @@ export default function AssetSidebar({
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-lg font-semibold text-white">Tra cứu Bản đồ</h2>
           
-          {/* NÚT THÊM MỚI TÀI SẢN CHO LÃNH ĐẠO / ADMIN */}
-          {(user?.role === 'admin' || user?.role === 'leader') && (
+          {/* NÚT THÊM MỚI TÀI SẢN CHO LÃNH ĐẠO / ADMIN / BÁO CÁO CHO NGƯỜI DÂN */}
+          {(user?.role === 'admin' || user?.role === 'leader') ? (
             <button 
               onClick={onCreateNew} 
               className="bg-primary-600 hover:bg-primary-500 text-white text-xs font-bold px-3 py-1.5 rounded-md flex items-center gap-1 shadow-lg shadow-primary-500/20 transition-all"
@@ -291,7 +292,15 @@ export default function AssetSidebar({
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" /></svg>
               THÊM MỚI
             </button>
-          )}
+          ) : user?.role === 'user' ? (
+            <button 
+              onClick={onCreateNew} 
+              className="bg-orange-600 hover:bg-orange-500 text-white text-xs font-bold px-3 py-1.5 rounded-md flex items-center gap-1 shadow-lg shadow-orange-500/20 transition-all"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" /></svg>
+              BÁO CÁO HƯ HỎNG
+            </button>
+          ) : null}
         </div>
 
         <input
@@ -392,20 +401,9 @@ export default function AssetSidebar({
                         </button>
                         
                         {/* HIỂN THỊ CHỨC NĂNG RIÊNG CHO ROLE LÃNH ĐẠO / ADMIN */}
-                        {user?.role === 'leader' || user?.role === 'admin' ? (
-                          <>
-                            <button 
-                              onClick={() => showDevToast('Chức năng GIAO VIỆC đang được phát triển')}
-                              className="flex-1 bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold py-2 px-1 rounded-md transition-colors flex items-center justify-center gap-1 shadow-sm min-w-[100px]"
-                            >
-                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
-                              GIAO VIỆC
-                            </button>
-                            {/* ĐÃ XÓA NÚT PHÊ DUYỆT THEO YÊU CẦU */}
-                          </>
-                        ) : (
+                        {user?.role === 'leader' || user?.role === 'admin' ? null : (
                           <button 
-                            onClick={onCreateNew}
+                            onClick={() => onReportError?.(asset)}
                             className="flex-1 bg-orange-600 hover:bg-orange-500 text-white text-xs font-semibold py-2 px-1 rounded-md transition-colors flex items-center justify-center gap-1 shadow-sm min-w-[100px]"
                           >
                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>

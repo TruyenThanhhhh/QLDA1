@@ -92,6 +92,18 @@ export default function AssetDetail({ asset, onClose, onEdit, onRefresh }) {
     }
   }, [targetId, tab, isOsm]);
 
+  useEffect(() => {
+    const handleReport = (e) => {
+      const assetId = e.detail;
+      if (assetId === targetId) {
+        setTab('maintenance');
+        setShowMaintForm(true);
+      }
+    };
+    window.addEventListener('asset:reportError', handleReport);
+    return () => window.removeEventListener('asset:reportError', handleReport);
+  }, [targetId]);
+
   const fetchMaintenance = async () => {
     try {
       setLoadingMaint(true);

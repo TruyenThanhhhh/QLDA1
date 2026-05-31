@@ -6,10 +6,13 @@ import Map from '../components/map/Map';
 import AssetSidebar from '../components/assets/AssetSidebar';
 import AssetDetail from '../components/assets/AssetDetail';
 import AssetForm from '../components/assets/AssetForm'; 
+import DamagePointForm from '../components/assets/DamagePointForm';
+import { useSocket } from '../contexts/SocketContext';
 
 export default function MapPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useAuth();
+  const socket = useSocket();
   const [assets, setAssets] = useState([]);
   const [areas, setAreas] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -68,6 +71,22 @@ export default function MapPage() {
   }, [fetchAssets, fetchAreas]);
 
   useEffect(() => {
+    if (!socket) return;
+
+    const handleUpdate = () => {
+      fetchAssets();
+    };
+
+    socket.on('new_asset_event', handleUpdate);
+    socket.on('new_maintenance_event', handleUpdate);
+
+    return () => {
+      socket.off('new_asset_event', handleUpdate);
+      socket.off('new_maintenance_event', handleUpdate);
+    };
+  }, [socket, fetchAssets]);
+
+  useEffect(() => {
     const assetId = searchParams.get('assetId') || selectedAsset?.id;
     if (assetId && assets.length > 0) {
       const found = assets.find(a => a.id === assetId || a._id === assetId);
@@ -82,6 +101,14 @@ export default function MapPage() {
     setShowForm(false);
     setEditingAsset(null);
     setIsPickingLocation(false);
+  };
+
+  const handleReportError = (asset) => {
+    setSelectedAsset(asset);
+    setShowForm(false);
+    setEditingAsset(null);
+    setIsPickingLocation(false);
+    window.dispatchEvent(new CustomEvent('asset:reportError', { detail: asset.id || asset._id }));
   };
 
   const handleCreateNew = () => {
@@ -276,6 +303,7 @@ export default function MapPage() {
           onCreateNew={handleCreateNew}
           onEditAsset={handleEdit}
           onDeleteAsset={handleDeleteAsset}
+          onReportError={handleReportError}
           selectedAssetId={selectedAsset?.id || selectedAsset?._id}
         />
       </div>
@@ -473,14 +501,25 @@ export default function MapPage() {
       {(selectedAsset || showForm) && (
         <div className="w-96 min-w-0 flex-shrink-0 border-l border-surface-700/50 bg-surface-900/95 backdrop-blur-xl overflow-y-auto animate-[slideInRight_0.3s_ease-out]">
           {showForm ? (
-            <AssetForm
-              asset={editingAsset}
-              onClose={handleFormClose}
-              onSaved={handleFormSaved}
-              presetLocation={presetLocation}
-              isPickingLocation={isPickingLocation}
-              onStartPickingLocation={handleStartPickingLocation}
-            />
+            user?.role === 'user' ? (
+              <DamagePointForm
+                asset={editingAsset}
+                onClose={handleFormClose}
+                onSaved={handleFormSaved}
+                presetLocation={presetLocation}
+                isPickingLocation={isPickingLocation}
+                onStartPickingLocation={handleStartPickingLocation}
+              />
+            ) : (
+              <AssetForm
+                asset={editingAsset}
+                onClose={handleFormClose}
+                onSaved={handleFormSaved}
+                presetLocation={presetLocation}
+                isPickingLocation={isPickingLocation}
+                onStartPickingLocation={handleStartPickingLocation}
+              />
+            )
           ) : (
             <AssetDetail
               asset={selectedAsset}

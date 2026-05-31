@@ -30,6 +30,18 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
+  // Tự động đồng bộ hóa phiên đăng nhập (Session) giữa các tab trình duyệt
+  useEffect(() => {
+    const handleStorageChange = (e) => {
+      if (e.key === 'qlda_user' || e.key === 'qlda_token') {
+        const savedUser = localStorage.getItem('qlda_user');
+        setUser(savedUser ? JSON.parse(savedUser) : null);
+      }
+    };
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
+
   const login = async (username, password) => {
     const res = await client.post('/auth/login', { username, password });
     const { token, user: userData } = res.data;

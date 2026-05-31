@@ -1,8 +1,8 @@
 const Asset = require('../models/Asset');
 const { success, error } = require('../utils/response');
 const audit = require('../services/audit.service');
-// --- THÊM MỚI: Import service bảo trì để tự động tạo công việc ---
 const maintenanceService = require('../services/maintenance.service');
+const { getIo } = require('../config/socket');
 
 const approveAsset = async (req, res, next) => {
   try {
@@ -54,6 +54,8 @@ const approveAsset = async (req, res, next) => {
       after: { approvalStatus },
       details: `Duyệt tài sản ${asset.assetCode}: ${oldStatus} → ${approvalStatus}`,
     });
+
+    getIo().emit('new_asset_event', { type: 'UPDATE_ASSET', data: asset });
 
     success(res, {
       id: asset.id,

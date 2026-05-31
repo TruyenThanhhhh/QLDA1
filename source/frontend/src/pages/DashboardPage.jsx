@@ -3,6 +3,7 @@ import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveCo
 import { FileSpreadsheet, FileText } from 'lucide-react';
 import client from '../api/client';
 import { useAuth } from '../contexts/AuthContext';
+import { useSocket } from '../contexts/SocketContext';
 
 // ==========================================
 // CẤU HÌNH & CONSTANTS CHUNG
@@ -79,6 +80,7 @@ function TechnicianDashboard({ user }) {
     critical: 'bg-purple-500/20 text-purple-400 animate-pulse'
   };
 
+  const socket = useSocket();
   const [tasks, setTasks] = useState({ open: [], in_progress: [], pending_approval: [], resolved: [] });
   const [loading, setLoading] = useState(true);
   const [selectedTask, setSelectedTask] = useState(null);
@@ -117,6 +119,17 @@ function TechnicianDashboard({ user }) {
   useEffect(() => {
     fetchTasks();
   }, []);
+
+  useEffect(() => {
+    if (!socket) return;
+    const handleUpdate = () => {
+      fetchTasks();
+    };
+    socket.on('new_maintenance_event', handleUpdate);
+    return () => {
+      socket.off('new_maintenance_event', handleUpdate);
+    };
+  }, [socket]);
 
   const handleOpenTask = (task) => {
     setSelectedTask(task);
@@ -422,6 +435,7 @@ function TechnicianDashboard({ user }) {
 // GIAO DIỆN 2: DÀNH CHO LÃNH ĐẠO / ADMIN 
 // ==========================================
 function LeaderDashboard({ user }) {
+  const socket = useSocket();
   const [currentTab, setCurrentTab] = useState('overview');
 
   const [summary, setSummary] = useState(null);
@@ -484,6 +498,19 @@ function LeaderDashboard({ user }) {
   useEffect(() => {
     fetchDashboardData();
   }, []);
+
+  useEffect(() => {
+    if (!socket) return;
+    const handleUpdate = () => {
+      fetchDashboardData();
+    };
+    socket.on('new_asset_event', handleUpdate);
+    socket.on('new_maintenance_event', handleUpdate);
+    return () => {
+      socket.off('new_asset_event', handleUpdate);
+      socket.off('new_maintenance_event', handleUpdate);
+    };
+  }, [socket]);
 
   const showToast = (message, type = 'success') => {
     setToast({ isVisible: true, message, type });
