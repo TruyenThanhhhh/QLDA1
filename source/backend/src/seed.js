@@ -393,59 +393,65 @@ const generateAssets = (areaIds, userIds) => {
   return assets;
 };
 
-const generateMaintenanceRecords = (assetIds, userIds) => {
+// ĐÃ SỬA LẠI HOÀN TOÀN HÀM NÀY: Đồng bộ chặt chẽ với trạng thái của từng Asset được sinh ra
+const generateMaintenanceRecords = (createdAssets, userIds) => {
   const records = [];
-  const descriptions = [
-    { type: 'incident', desc: 'Phat hien hu hong be mat, can sua chua', sev: 'medium' },
-    { type: 'incident', desc: 'Do nghieng do va cham giao thong', sev: 'high' },
-    { type: 'incident', desc: 'Mat dien, khong hoat dong', sev: 'critical' },
-    { type: 'incident', desc: 'Bi cong venh, mo phan quang', sev: 'low' },
-    { type: 'incident', desc: 'Ngap nuoc, nap cong bi troi', sev: 'high' },
-    { type: 'maintenance', desc: 'Son lai be mat, ve sinh', sev: 'low' },
-    { type: 'maintenance', desc: 'Thay the bong den LED', sev: 'medium' },
-    { type: 'maintenance', desc: 'Sua chua be mat duong, va o ga', sev: 'medium' },
-    { type: 'maintenance', desc: 'Kiem tra dinh ky, thay fixed le linh kien', sev: 'low' },
-    { type: 'maintenance', desc: 'Nang cap he thong cam bien', sev: 'medium' },
-    { type: 'incident', desc: 'Ran nut lon do xe tai nang', sev: 'high' },
-    { type: 'maintenance', desc: 'Lap dat them he thong thoat nuoc', sev: 'medium' },
-    { type: 'incident', desc: 'Bi pha hoai, mat bien bao', sev: 'critical' },
-    { type: 'maintenance', desc: 'Cat tia cay xanh che khuat bien bao', sev: 'low' },
-    { type: 'maintenance', desc: 'Thay the nap cong moi', sev: 'medium' },
-  ];
-
-  // Các trạng thái tương ứng với 3 cột trên frontend
-  const uiStatuses = ['open', 'in_progress', 'resolved'];
-  const damagedAssets = assetIds.filter((_, i) => i % 3 === 0 || i % 5 === 0);
-
-  // Gán việc cho Kỹ thuật viên (index 2) và người báo cáo (Người dân, index 3)
   const technicianId = userIds[2];
   const citizenId = userIds[3];
 
-  for (let i = 0; i < Math.min(15, damagedAssets.length); i++) {
-    const d = descriptions[i % descriptions.length];
-    
-    // Cố tình phân bổ đều task vào 3 cột trên bảng Kanban
-    const status = uiStatuses[i % 3]; 
-
+  // 1. DÀNH CHO CÁC TÀI SẢN ĐANG BỊ HỎNG (damaged)
+  // BẮT BUỘC mọi tài sản damaged phải có 1 record status: 'open' để Lãnh đạo giao việc
+  const damagedAssets = createdAssets.filter(a => a.status === 'damaged');
+  damagedAssets.forEach((asset) => {
     records.push({
-      assetId: damagedAssets[i],
-      recordType: d.type,
-      title: d.desc,
-      description: `${d.desc} (Chi tiet quan sat tai hien truong)`,
-      severity: d.sev,
+      assetId: asset._id,
+      recordType: 'incident',
+      title: `Cần xử lý hư hỏng: ${asset.name}`,
+      description: 'Hệ thống/Người dân ghi nhận tài sản hư hỏng cần được phân công sửa chữa.',
+      severity: 'high',
       reportedBy: citizenId,
-      performedBy: technicianId, // <--- ĐÃ SỬA: Gán chính xác cho kỹ thuật viên
-      costEstimate: Math.floor(Math.random() * 50000000) + 1000000,
-      costActual: status === 'resolved'
-        ? Math.floor(Math.random() * 50000000) + 1000000
-        : undefined,
-      status,
-      recordedAt: new Date(2026, Math.floor(Math.random() * 3), Math.floor(Math.random() * 28) + 1),
-      resolvedAt: status === 'resolved'
-        ? new Date(2026, 3, Math.floor(Math.random() * 6) + 1)
-        : undefined,
+      performedBy: undefined, // CHƯA CÓ KTV (Để trống cho chức năng "Giao việc")
+      status: 'open',         // SẴN SÀNG ĐỂ GIAO
+      recordedAt: new Date(2026, 3, Math.floor(Math.random() * 28) + 1),
     });
-  }
+  });
+
+  // 2. DÀNH CHO MỘT SỐ TÀI SẢN BÌNH THƯỜNG (fair)
+  // Giả lập đang bảo trì (để biểu đồ đa dạng)
+  const fairAssets = createdAssets.filter(a => a.status === 'fair').slice(0, 5);
+  fairAssets.forEach((asset) => {
+    records.push({
+      assetId: asset._id,
+      recordType: 'maintenance',
+      title: `Bảo trì định kỳ: ${asset.name}`,
+      description: 'Kỹ thuật viên đang tiến hành bảo trì.',
+      severity: 'medium',
+      reportedBy: citizenId,
+      performedBy: technicianId, // ĐÃ GIAO CHO KTV
+      status: 'in_progress',     // ĐANG XỬ LÝ
+      recordedAt: new Date(2026, 4, 1),
+    });
+  });
+
+  // 3. DÀNH CHO MỘT SỐ TÀI SẢN TỐT (good)
+  // Giả lập lịch sử bảo trì đã hoàn tất
+  const goodAssets = createdAssets.filter(a => a.status === 'good').slice(0, 8);
+  goodAssets.forEach((asset) => {
+    records.push({
+      assetId: asset._id,
+      recordType: 'incident',
+      title: `Đã khắc phục sự cố: ${asset.name}`,
+      description: 'Đã hoàn tất sửa chữa, nghiệm thu và thay đổi trạng thái tài sản thành Tốt.',
+      severity: 'low',
+      reportedBy: citizenId,
+      performedBy: technicianId,
+      costEstimate: Math.floor(Math.random() * 5000000) + 1000000,
+      costActual: Math.floor(Math.random() * 5000000) + 800000,
+      status: 'resolved',
+      recordedAt: new Date(2026, 2, 10),
+      resolvedAt: new Date(2026, 2, 15),
+    });
+  });
 
   return records;
 };
@@ -476,8 +482,8 @@ const seed = async () => {
     console.log(`  Created ${createdAssets.length} assets`);
 
     console.log('Seeding maintenance records...');
-    const assetIds = createdAssets.map((a) => a._id);
-    const maintenanceData = generateMaintenanceRecords(assetIds, userIds);
+    // Đã sửa: Truyền createdAssets thay vì assetIds để lấy được state (good, fair, damaged) của chúng
+    const maintenanceData = generateMaintenanceRecords(createdAssets, userIds);
     const createdRecords = await MaintenanceRecord.insertMany(maintenanceData);
     console.log(`  Created ${createdRecords.length} maintenance records`);
 

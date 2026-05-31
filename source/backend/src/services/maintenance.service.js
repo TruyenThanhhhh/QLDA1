@@ -21,7 +21,6 @@ const getByAsset = async (assetId, query = {}) => {
 };
 
 const getAllTasks = async (query = {}) => {
-  // Bỏ qua các task đã bị hủy
   const records = await MaintenanceRecord.find({ status: { $ne: 'cancelled' } })
     .populate({
       path: 'assetId',
@@ -49,8 +48,8 @@ const getAllTasks = async (query = {}) => {
       progress: progress,
       assignee: obj.performedBy?.fullName || 'Chưa phân công',
       startDate: obj.recordedAt ? new Date(obj.recordedAt).toLocaleDateString('vi-VN') : 'N/A',
-      notes: obj.notes,        // Trả về ghi chú
-      photos: obj.photos       // Trả về mảng hình ảnh
+      notes: obj.notes,
+      photos: obj.photos
     };
   });
 };
@@ -63,8 +62,17 @@ const create = async (assetId, data, user) => {
 
   if (user.role === 'user') {
     data.recordType = 'incident';
-  } else if (user.role === 'technician' || user.role === 'admin') {
-    data.performedBy = user._id;
+  } else if (user.role === 'technician') {
+    // KTV tự tạo phiếu thì mặc định tự nhận việc (nếu chưa gán cho ai)
+    if (data.performedBy === undefined) {
+      data.performedBy = user._id;
+    }
+  }
+  // ĐÃ SỬA: Xóa bỏ việc tự động lấy ID của Admin gán vào performedBy.
+  // Khi Lãnh đạo / Admin tạo phiếu từ controller, data.performedBy sẽ truyền vào null.
+  
+  if (data.performedBy === null) {
+      data.performedBy = undefined; // Ép về undefined để DB hiểu là chưa có ai phụ trách
   }
 
   const record = new MaintenanceRecord({
@@ -74,8 +82,12 @@ const create = async (assetId, data, user) => {
   });
   await record.save();
 
+  // ĐÃ SỬA: Đồng bộ luôn trạng thái needsMaintenance = true cho Asset
   if (data.recordType === 'incident' && ['high', 'critical'].includes(data.severity)) {
-    await Asset.findByIdAndUpdate(assetId, { status: 'damaged' });
+    await Asset.findByIdAndUpdate(assetId, { 
+      status: 'damaged',
+      needsMaintenance: true 
+    });
   }
 
   audit.log({
@@ -120,10 +132,6 @@ const update = async (id, data, user) => {
   return record;
 };
 
-// ============================================================================
-// HÀM MỚI: XỬ LÝ GIAO VIỆC CHO KỸ THUẬT VIÊN
-// ============================================================================
-
 // 1. Lấy danh sách nhân viên kỹ thuật
 const getTechnicians = async () => {
   return await User.find({ role: 'technician', isActive: true }).select('_id fullName username');
@@ -133,11 +141,11 @@ const getTechnicians = async () => {
 const assignTaskByAssetId = async (assetId, technicianId, user) => {
   const record = await MaintenanceRecord.findOne({
     assetId: assetId,
-    status: 'open' // Tìm sự cố đang treo chưa ai xử lý
+    status: { $in: ['open', 'in_progress'] } 
   });
 
   if (!record) {
-    throw Object.assign(new Error('Tài sản này không có sự cố nào đang chờ xử lý.'), { statusCode: 404 });
+    throw Object.assign(new Error('Tài sản này không có phiếu sự cố nào đang chờ phân công hoặc xử lý. Vui lòng kiểm tra lại!'), { statusCode: 404 });
   }
 
   const tech = await User.findById(technicianId);
@@ -147,23 +155,30 @@ const assignTaskByAssetId = async (assetId, technicianId, user) => {
 
   const before = record.toObject();
 
-  // ĐÃ SỬA: Chỉ cập nhật người xử lý, giữ nguyên trạng thái là 'open' (Mới nhận / Chờ xử lý)
-  record.performedBy = technicianId;
-  record.status = 'open'; 
-  record.updatedBy = user._id;
-  await record.save();
+  // Update DB trực tiếp để tránh Hook ngầm tự động đổi sang in_progress
+  const updatedRecord = await MaintenanceRecord.findOneAndUpdate(
+    { _id: record._id },
+    { 
+      $set: { 
+        performedBy: technicianId, 
+        status: 'open', 
+        updatedBy: user._id 
+      } 
+    },
+    { new: true }
+  );
 
   audit.log({
     action: 'assign',
     entityType: 'MaintenanceRecord',
-    entityId: record._id,
+    entityId: updatedRecord._id,
     performedBy: user._id,
     before: before,
-    after: record.toObject(),
+    after: updatedRecord.toObject(),
     details: `Giao việc xử lý sự cố cho KTV: ${tech.fullName}`,
   });
 
-  return record;
+  return updatedRecord;
 };
 
 // 3. Nghiệm thu công việc (Lãnh đạo phê duyệt/từ chối hoàn thành sửa chữa)
@@ -186,7 +201,6 @@ const acceptTask = async (id, approvalStatus, leaderNotes, user) => {
       record.notes = leaderNotes;
     }
 
-    // Tự động chuyển trạng thái của Asset sang 'good' để hiển thị xanh trên OSM map
     await Asset.findByIdAndUpdate(record.assetId, {
       $set: {
         status: 'good',
@@ -195,7 +209,7 @@ const acceptTask = async (id, approvalStatus, leaderNotes, user) => {
       }
     });
   } else if (approvalStatus === 'rejected') {
-    record.status = 'in_progress'; // Bắt buộc KTV sửa chữa lại
+    record.status = 'in_progress';
     if (leaderNotes) {
       record.notes = `[Lãnh đạo từ chối nghiệm thu]: ${leaderNotes}`;
     }

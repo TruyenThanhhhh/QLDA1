@@ -103,11 +103,26 @@ export default function MapPage() {
     setIsPickingLocation(false);
   };
 
+  // ĐÃ SỬA LỖI Ở ĐÂY
   const handleReportError = (asset) => {
-    setSelectedAsset(asset);
-    setShowForm(false);
-    setEditingAsset(null);
+    // 1. Xử lý riêng biệt nếu là điểm lấy từ OpenStreetMap (chưa có trong DB)
+    if (asset.id && String(asset.id).startsWith('osm-')) {
+      setEditingAsset(null); 
+      // Lấy tọa độ truyền vào cho form tạo mới (GeoJSON là [lng, lat] -> Leaflet cần [lat, lng])
+      if (asset.geometry?.coordinates) {
+        setPresetLocation([asset.geometry.coordinates[1], asset.geometry.coordinates[0]]);
+      }
+    } else {
+      // 2. Tài sản đã tồn tại trong Database
+      setEditingAsset(asset);
+      setPresetLocation(null);
+    }
+
+    // Đổi thành true để HIỂN THỊ FORM
+    setShowForm(true); 
+    setSelectedAsset(null); // Ẩn trang chi tiết đi
     setIsPickingLocation(false);
+    
     window.dispatchEvent(new CustomEvent('asset:reportError', { detail: asset.id || asset._id }));
   };
 

@@ -19,10 +19,15 @@ const approveAsset = async (req, res, next) => {
 
     const oldStatus = asset.approvalStatus;
     asset.approvalStatus = approvalStatus;
+    
+    // ĐÃ SỬA: Đảm bảo bật cờ needsMaintenance = true để hiển thị trên Dashboard Ưu tiên
+    if (approvalStatus === 'approved' && asset.status === 'damaged') {
+      asset.needsMaintenance = true;
+    }
+
     await asset.save();
 
     // --- BẮT ĐẦU LOGIC TỰ ĐỘNG HÓA ---
-    // Nếu Lãnh đạo duyệt một báo cáo có tình trạng hư hỏng -> Tự động tạo Task bảo trì
     if (approvalStatus === 'approved' && asset.status === 'damaged') {
       await maintenanceService.create(
         asset._id,
@@ -31,13 +36,13 @@ const approveAsset = async (req, res, next) => {
           description: 'Dự án thi công/sửa chữa được tạo tự động sau khi Lãnh đạo phê duyệt báo cáo.',
           severity: 'high',         // Đánh dấu ưu tiên cao
           recordType: 'incident',   // Loại là sự cố
-          status: 'open'            // Trạng thái mở, chờ phân công cho Kỹ thuật viên
+          status: 'open',           // Trạng thái mở, chờ phân công cho Kỹ thuật viên
+          performedBy: null         // ĐÃ SỬA: Ép buộc để trống người thực hiện để hiển thị nút "Giao việc"
         },
-        req.user // Lãnh đạo là người kích hoạt hành động này
+        req.user // Lãnh đạo là người kích hoạt
       );
     } else if (approvalStatus === 'rejected') {
-      // Nếu từ chối, có thể cân nhắc xóa hoặc đánh dấu để không hiện lại
-      // Ở đây ta có thể xóa luôn asset nếu nó là report từ người dân
+      // Xóa luôn tài sản rác nếu lãnh đạo từ chối
        if (asset.source === 'user_report' || asset.source === 'manual') {
           asset.isDeleted = true;
           await asset.save();
@@ -55,7 +60,9 @@ const approveAsset = async (req, res, next) => {
       details: `Duyệt tài sản ${asset.assetCode}: ${oldStatus} → ${approvalStatus}`,
     });
 
+    // Phát sóng cho toàn bộ client biết để load lại dữ liệu
     getIo().emit('new_asset_event', { type: 'UPDATE_ASSET', data: asset });
+    getIo().emit('new_maintenance_event', { type: 'CREATE_MAINTENANCE' });
 
     success(res, {
       id: asset.id,

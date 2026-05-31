@@ -34,9 +34,13 @@ const getSummary = async () => {
       .populate('reportedBy', 'fullName')
       .sort({ recordedAt: -1 })
       .limit(10),
-    Asset.find({ status: 'damaged', ...baseFilter })
+    // Lấy list priority (cho các màn hình phụ nếu cần)
+    Asset.find({ 
+      $or: [{ status: 'damaged' }, { needsMaintenance: true }], 
+      ...baseFilter 
+    })
       .populate('managedAreaId', 'code name')
-      .sort({ updatedAt: 1 })
+      .sort({ updatedAt: -1, _id: -1 }) // Cập nhật sort mới nhất lên đầu
       .limit(20),
   ]);
 
@@ -82,29 +86,39 @@ const getIncidentsByArea = async () => {
 };
 
 const getPriorityList = async () => {
-  // 1. Tìm các dự án/sự cố ĐÃ ĐƯỢC GIAO VIỆC (Có KTV phụ trách)
-  const assignedTasks = await MaintenanceRecord.find({
-    status: { $in: ['open', 'in_progress'] },
-    performedBy: { $exists: true, $ne: null }
+  // 1. Tìm TẤT CẢ các dự án/sự cố ĐANG MỞ (open, in_progress)
+  // Bất kể đã có KTV nhận hay chưa
+  const activeTasks = await MaintenanceRecord.find({
+    status: { $in: ['open', 'in_progress'] }
   }).populate('performedBy', 'fullName').select('assetId performedBy');
 
-  // Map dữ liệu ai đang làm tài sản nào
   const assignedMap = {};
-  assignedTasks.forEach(task => {
+  const activeAssetIds = [];
+  
+  activeTasks.forEach(task => {
     if (task.assetId) {
-      assignedMap[task.assetId.toString()] = task.performedBy?.fullName || 'KTV';
+      activeAssetIds.push(task.assetId); // Thu thập mọi Asset đang có sự cố
+      if (task.performedBy) {
+        assignedMap[task.assetId.toString()] = task.performedBy.fullName;
+      }
     }
   });
 
-  // 2. Lấy TẤT CẢ các tài sản HƯ HỎNG, ĐÃ DUYỆT (Hiển thị tất cả để Lãnh đạo nắm được)
+  // 2. Lấy TẤT CẢ các tài sản HƯ HỎNG, CẦN BẢO TRÌ, HOẶC CÓ PHIẾU SỰ CỐ MỞ
+  // Việc thêm { _id: { $in: activeAssetIds } } sẽ triệt tiêu hoàn toàn race condition
+  // Đảm bảo cứ Lãnh đạo ấn Duyệt tạo phiếu xong là Asset sẽ lọt vào danh sách này 100%
   const assets = await Asset.find({
-    status: 'damaged',
+    $or: [
+      { status: 'damaged' }, 
+      { needsMaintenance: true },
+      { _id: { $in: activeAssetIds } } 
+    ],
     isDeleted: { $ne: true },
     approvalStatus: 'approved'
   })
     .populate('managedAreaId', 'code name')
-    .sort({ updatedAt: 1 })
-    .limit(20);
+    .sort({ updatedAt: -1, _id: -1 }) // Ép xếp mới nhất lên đầu bảng
+    .limit(50); // Mở rộng limit để không bị thiếu sót
 
   // 3. Đính kèm trạng thái "Đã giao việc" (isAssigned) để báo cho Frontend
   return assets.map(asset => {

@@ -18,15 +18,15 @@ const statusStyles = {
 };
 
 export default function AssetSidebar({ 
-  assets, 
-  loading, 
-  filters, 
-  onFilterChange, 
-  onAssetClick, 
-  onCreateNew, 
-  selectedAssetId,
-  onRouteFound,
-  onReportError
+  assets = [], 
+  loading = false, 
+  filters = {}, 
+  onFilterChange = () => {}, 
+  onAssetClick = () => {}, 
+  onCreateNew = () => {}, 
+  selectedAssetId = null,
+  onRouteFound = () => {},
+  onReportError // Prop này cần được truyền từ Component cha (ví dụ MainLayout)
 }) {
   const { hasRole, user } = useAuth(); 
   const [osmResults, setOsmResults] = useState([]);
@@ -159,7 +159,9 @@ export default function AssetSidebar({
     setRouteError('');
     setShowRouteSuggestions(false);
     if (onRouteFound) onRouteFound(null);
-    window.dispatchEvent(new CustomEvent('map:clearRoute')); 
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('map:clearRoute')); 
+    }
   }, [selectedAssetId]);
 
   const handleSearchChange = (e) => {
@@ -167,6 +169,16 @@ export default function AssetSidebar({
   };
 
   const combinedAssets = [...assets, ...osmResults];
+
+  // Tính toán Gom cụm tài sản theo assetType và status
+  const groupedAssets = combinedAssets.reduce((groups, asset) => {
+    const key = `${asset.assetType}|${asset.status}`;
+    if (!groups[key]) {
+      groups[key] = [];
+    }
+    groups[key].push(asset);
+    return groups;
+  }, {});
 
   const handleGetCurrentLocation = () => {
     if (navigator.geolocation) {
@@ -242,7 +254,7 @@ export default function AssetSidebar({
             if (routeData.features && routeData.features.length > 0) {
               const geometry = routeData.features[0].geometry;
               if (onRouteFound) onRouteFound(geometry);
-              window.dispatchEvent(new CustomEvent('map:routeFound', { detail: geometry }));
+              if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('map:routeFound', { detail: geometry }));
               setIsRouting(false);
               return; 
             }
@@ -257,7 +269,7 @@ export default function AssetSidebar({
         if (routeData.routes && routeData.routes[0]) {
           const geometry = routeData.routes[0].geometry;
           if (onRouteFound) onRouteFound(geometry);
-          window.dispatchEvent(new CustomEvent('map:routeFound', { detail: geometry }));
+          if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('map:routeFound', { detail: geometry }));
         } else {
           setRouteError('Không thể tìm thấy đường đi ô tô tới đây.');
         }
@@ -357,126 +369,167 @@ export default function AssetSidebar({
             Không tìm thấy kết quả nào phù hợp
           </div>
         ) : (
-          <div className="divide-y divide-surface-700/30">
-            {combinedAssets.map((asset) => (
-              <div key={asset.id || asset._id} className="flex flex-col">
-                <button
-                  onClick={() => onAssetClick(asset)}
-                  className={`w-full text-left px-4 py-3 hover:bg-surface-800/50 transition-colors duration-150 ${
-                    selectedAssetId === (asset.id || asset._id) ? 'bg-primary-600/10 border-l-2 border-primary-500' : ''
-                  }`}
-                >
-                  <div className="flex items-start gap-2.5">
-                    <span className="text-lg mt-0.5 flex-shrink-0">{typeIcons[asset.assetType] || '📍'}</span>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-surface-200 truncate">{asset.name}</p>
-                      <div className="flex items-center gap-2 mt-1">
-                        <span className="text-[10px] text-surface-500 font-mono">{asset.assetCode}</span>
-                        {asset.status !== 'none' && (
-                          <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-medium ${statusStyles[asset.status]}`}>
-                            {statusLabels[asset.status]}
-                          </span>
-                        )}
-                      </div>
-                      {asset.fullAddress && (
-                        <p className="text-[10px] text-surface-500 mt-1 truncate">{asset.fullAddress}</p>
+          <div className="pb-4">
+            {Object.entries(groupedAssets).map(([key, groupAssets]) => {
+              // Phân tích key để lấy hiển thị Header Nhóm
+              const firstAsset = groupAssets[0];
+              const typeLabel = typeLabels[firstAsset.assetType] || firstAsset.assetType || 'Khác';
+              const typeIcon = typeIcons[firstAsset.assetType] || '📍';
+              const statusLabel = statusLabels[firstAsset.status] || firstAsset.status;
+              const statusStyle = statusStyles[firstAsset.status] || statusStyles.none;
+
+              return (
+                <div key={key} className="mb-4">
+                  {/* Tiêu đề Gom Nhóm */}
+                  <div className="sticky top-0 z-10 bg-surface-900/95 backdrop-blur-md px-4 py-2 border-y border-surface-700/50 flex items-center justify-between shadow-sm">
+                    <div className="flex items-center gap-2">
+                      <span className="text-base">{typeIcon}</span>
+                      <span className="text-xs font-bold text-surface-300 uppercase tracking-wider">{typeLabel}</span>
+                      {firstAsset.status !== 'none' && (
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${statusStyle}`}>
+                          {statusLabel}
+                        </span>
                       )}
                     </div>
+                    <span className="text-[10px] bg-surface-800 border border-surface-700 text-surface-400 px-2 py-0.5 rounded-full font-mono">
+                      {groupAssets.length}
+                    </span>
                   </div>
-                </button>
 
-                {/* KHU VỰC HIỂN THỊ KHI ĐƯỢC CHỌN */}
-                {selectedAssetId === (asset.id || asset._id) && (
-                  <div className="px-4 pb-4 pt-1 bg-primary-600/5">
-                    
-                    {/* View Mặc định: Hiển thị nút theo Role */}
-                    {!routingMode ? (
-                      <div className="flex flex-row gap-2 mt-2 flex-wrap">
-                        <button 
-                          onClick={() => setRoutingMode(true)}
-                          className="flex-1 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold py-2 px-1 rounded-md transition-colors flex items-center justify-center gap-1 shadow-sm min-w-[100px]"
-                        >
-                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" /></svg>
-                          TÌM ĐƯỜNG
-                        </button>
-                        
-                        {/* HIỂN THỊ CHỨC NĂNG RIÊNG CHO ROLE LÃNH ĐẠO / ADMIN */}
-                        {user?.role === 'leader' || user?.role === 'admin' ? null : (
-                          <button 
-                            onClick={() => onReportError?.(asset)}
-                            className="flex-1 bg-orange-600 hover:bg-orange-500 text-white text-xs font-semibold py-2 px-1 rounded-md transition-colors flex items-center justify-center gap-1 shadow-sm min-w-[100px]"
+                  {/* Danh sách Tài sản trong Nhóm */}
+                  <div className="divide-y divide-surface-700/30">
+                    {groupAssets.map((asset) => {
+                      const isOSMLocation = String(asset.id || asset._id).startsWith('osm-');
+
+                      return (
+                        <div key={asset.id || asset._id} className="flex flex-col">
+                          <button
+                            onClick={() => onAssetClick(asset)}
+                            className={`w-full text-left px-4 py-3 hover:bg-surface-800/50 transition-colors duration-150 ${
+                              selectedAssetId === (asset.id || asset._id) ? 'bg-primary-600/10 border-l-2 border-primary-500' : ''
+                            }`}
                           >
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
-                            BÁO LỖI
-                          </button>
-                        )}
-                      </div>
-                    ) : (
-                      
-                      /* View khi bấm Tìm đường: Hiển thị Input nhập điểm đi kèm Autocomplete */
-                      <div className="mt-2 p-3 bg-surface-900 rounded-md border border-surface-700">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-xs font-medium text-blue-400">Chỉ đường tới đây</span>
-                          <button onClick={() => setRoutingMode(false)} className="text-surface-500 hover:text-white text-xs">✕ Hủy</button>
-                        </div>
-                        
-                        {/* Wrapper relative cho Dropdown */}
-                        <div className="relative mb-2">
-                          <input 
-                            type="text" 
-                            placeholder="Nhập 1 phần địa chỉ đi..." 
-                            value={startQuery}
-                            onChange={(e) => { 
-                              setStartQuery(e.target.value); 
-                              setStartCoords(null); 
-                              setShowRouteSuggestions(true);
-                            }}
-                            onFocus={() => { if (routeSuggestions.length > 0) setShowRouteSuggestions(true); }}
-                            className="w-full bg-surface-800 text-surface-200 text-xs border border-surface-600 rounded flex-1 px-2 py-2 pr-8 focus:outline-none focus:border-blue-500 transition-colors"
-                          />
-                          <button 
-                            onClick={handleGetCurrentLocation}
-                            title="Lấy vị trí của tôi"
-                            className="absolute right-2 top-1/2 -translate-y-1/2 text-surface-400 hover:text-blue-400"
-                          >
-                            🧭
+                            <div className="flex items-start gap-2.5">
+                              <span className="text-lg mt-0.5 flex-shrink-0">{typeIcons[asset.assetType] || '📍'}</span>
+                              <div className="min-w-0 flex-1">
+                                <p className="text-sm font-medium text-surface-200 truncate">{asset.name}</p>
+                                <div className="flex items-center gap-2 mt-1">
+                                  <span className="text-[10px] text-surface-500 font-mono">{asset.assetCode}</span>
+                                  {/* Đã ẩn status tag ở từng item vì đã hiển thị trên Header nhóm */}
+                                </div>
+                                {asset.fullAddress && (
+                                  <p className="text-[10px] text-surface-500 mt-1 truncate">{asset.fullAddress}</p>
+                                )}
+                              </div>
+                            </div>
                           </button>
 
-                          {/* Box Dropdown Gợi ý */}
-                          {showRouteSuggestions && routeSuggestions.length > 0 && (
-                            <div className="absolute top-full left-0 right-0 mt-1 z-50 bg-surface-800 border border-surface-600 rounded-md shadow-lg max-h-40 overflow-y-auto">
-                              {routeSuggestions.map((item, idx) => (
-                                <button
-                                  key={idx}
-                                  onClick={() => handleSelectSuggestion(item)}
-                                  className="w-full text-left px-3 py-2 hover:bg-surface-700 transition-colors border-b border-surface-700/50 last:border-0"
-                                >
-                                  <p className="text-xs font-medium text-surface-200 truncate">{item.name}</p>
-                                  {item.address && (
-                                    <p className="text-[10px] text-surface-500 truncate mt-0.5">{item.address}</p>
+                          {/* KHU VỰC HIỂN THỊ KHI ĐƯỢC CHỌN */}
+                          {selectedAssetId === (asset.id || asset._id) && (
+                            <div className="px-4 pb-4 pt-1 bg-primary-600/5">
+                              
+                              {/* View Mặc định: Hiển thị nút theo Role */}
+                              {!routingMode ? (
+                                <div className="flex flex-row gap-2 mt-2 flex-wrap">
+                                  <button 
+                                    onClick={() => setRoutingMode(true)}
+                                    className="flex-1 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold py-2 px-1 rounded-md transition-colors flex items-center justify-center gap-1 shadow-sm min-w-[100px]"
+                                  >
+                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" /></svg>
+                                    TÌM ĐƯỜNG
+                                  </button>
+                                  
+                                  {/* HIỂN THỊ CHỨC NĂNG RIÊNG CHO ROLE LÃNH ĐẠO / ADMIN / USER (Có điều kiện) */}
+                                  {user?.role === 'leader' || user?.role === 'admin' ? null : (
+                                    // NẾU LÀ NGƯỜI DÂN (USER) VÀ ĐỊA ĐIỂM LÀ TỪ OSM THÌ MỚI HIỆN NÚT BÁO LỖI
+                                    (isOSMLocation && (
+                                      <button 
+                                        onClick={() => {
+                                          if (onReportError) {
+                                            onReportError(asset);
+                                          } else {
+                                            showDevToast('⚠️ Component cha chưa cấu hình form Báo Lỗi!');
+                                          }
+                                        }}
+                                        className="flex-1 bg-orange-600 hover:bg-orange-500 text-white text-xs font-semibold py-2 px-1 rounded-md transition-colors flex items-center justify-center gap-1 shadow-sm min-w-[100px]"
+                                      >
+                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                                        BÁO LỖI
+                                      </button>
+                                    ))
                                   )}
-                                </button>
-                              ))}
+                                </div>
+                              ) : (
+                                
+                                /* View khi bấm Tìm đường: Hiển thị Input nhập điểm đi kèm Autocomplete */
+                                <div className="mt-2 p-3 bg-surface-900 rounded-md border border-surface-700">
+                                  <div className="flex items-center justify-between mb-2">
+                                    <span className="text-xs font-medium text-blue-400">Chỉ đường tới đây</span>
+                                    <button onClick={() => setRoutingMode(false)} className="text-surface-500 hover:text-white text-xs">✕ Hủy</button>
+                                  </div>
+                                  
+                                  {/* Wrapper relative cho Dropdown */}
+                                  <div className="relative mb-2">
+                                    <input 
+                                      type="text" 
+                                      placeholder="Nhập 1 phần địa chỉ đi..." 
+                                      value={startQuery}
+                                      onChange={(e) => { 
+                                        setStartQuery(e.target.value); 
+                                        setStartCoords(null); 
+                                        setShowRouteSuggestions(true);
+                                      }}
+                                      onFocus={() => { if (routeSuggestions.length > 0) setShowRouteSuggestions(true); }}
+                                      className="w-full bg-surface-800 text-surface-200 text-xs border border-surface-600 rounded flex-1 px-2 py-2 pr-8 focus:outline-none focus:border-blue-500 transition-colors"
+                                    />
+                                    <button 
+                                      onClick={handleGetCurrentLocation}
+                                      title="Lấy vị trí của tôi"
+                                      className="absolute right-2 top-1/2 -translate-y-1/2 text-surface-400 hover:text-blue-400"
+                                    >
+                                      🧭
+                                    </button>
+
+                                    {/* Box Dropdown Gợi ý */}
+                                    {showRouteSuggestions && routeSuggestions.length > 0 && (
+                                      <div className="absolute top-full left-0 right-0 mt-1 z-50 bg-surface-800 border border-surface-600 rounded-md shadow-lg max-h-40 overflow-y-auto">
+                                        {routeSuggestions.map((item, idx) => (
+                                          <button
+                                            key={idx}
+                                            onClick={() => handleSelectSuggestion(item)}
+                                            className="w-full text-left px-3 py-2 hover:bg-surface-700 transition-colors border-b border-surface-700/50 last:border-0"
+                                          >
+                                            <p className="text-xs font-medium text-surface-200 truncate">{item.name}</p>
+                                            {item.address && (
+                                              <p className="text-[10px] text-surface-500 truncate mt-0.5">{item.address}</p>
+                                            )}
+                                          </button>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  {routeError && <p className="text-red-400 text-[10px] mb-2">{routeError}</p>}
+
+                                  <button 
+                                    onClick={() => calculateRoute(asset)}
+                                    disabled={isRouting}
+                                    className="w-full bg-blue-600 hover:bg-blue-500 text-white font-medium text-xs py-2 rounded transition-colors"
+                                  >
+                                    {isRouting ? 'Đang vẽ đường...' : 'BẮT ĐẦU VẼ ĐƯỜNG'}
+                                  </button>
+                                </div>
+                              )}
+
                             </div>
                           )}
                         </div>
-
-                        {routeError && <p className="text-red-400 text-[10px] mb-2">{routeError}</p>}
-
-                        <button 
-                          onClick={() => calculateRoute(asset)}
-                          disabled={isRouting}
-                          className="w-full bg-blue-600 hover:bg-blue-500 text-white font-medium text-xs py-2 rounded transition-colors"
-                        >
-                          {isRouting ? 'Đang vẽ đường...' : 'BẮT ĐẦU VẼ ĐƯỜNG'}
-                        </button>
-                      </div>
-                    )}
-
+                      );
+                    })}
                   </div>
-                )}
-              </div>
-            ))}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
